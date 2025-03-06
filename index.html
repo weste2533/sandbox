@@ -2,112 +2,143 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Fund Data Loader</title>
-    <script src="fund-distribution-parser.js" defer></script> 
+    <title>Fund Portfolio Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="fund-distribution-parser.js" defer></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 2rem; background-color: #f5f5f5; }
         #container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        #debug { font-family: monospace; white-space: pre-wrap; background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; max-height: 400px; overflow: auto; }
+        .tab { display: none; }
+        .tab.active { display: block; }
+        .tabs { display: flex; gap: 1rem; margin-bottom: 1rem; }
+        .tabs button { padding: 0.5rem 1rem; cursor: pointer; border: none; background: #007bff; color: white; border-radius: 4px; }
+        .tabs button.active { background: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #f8f9fa; }
     </style>
 </head>
 <body>
     <div id="container">
-        <h1>Mutual Fund Data Loader</h1>
-        <div id="debug">Debug Output:</div>
+        <h1>Fund Portfolio Tracker</h1>
+
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab(0)">Portfolio Chart</button>
+            <button class="tab-btn" onclick="switchTab(1)">ANCFX Data</button>
+            <button class="tab-btn" onclick="switchTab(2)">AGTHX Data</button>
+            <button class="tab-btn" onclick="switchTab(3)">AFAXX Distributions</button>
+        </div>
+
+        <!-- Portfolio Chart Tab -->
+        <div class="tab active">
+            <label>Start Date: <input type="date" id="startDate" value="2024-12-30"></label>
+            <label>MMF Units: <input type="number" id="mmfUnits" value="77650.78"></label>
+            <label>ANCFX Shares: <input type="number" id="ancfxShares" value="860.672"></label>
+            <label>AGTHX Shares: <input type="number" id="agthxShares" value="104.855"></label>
+            <button onclick="updateChart()">Update Chart</button>
+            <canvas id="portfolioChart"></canvas>
+        </div>
+
+        <!-- ANCFX Data Tab -->
+        <div class="tab">
+            <h2>ANCFX NAV & Distributions</h2>
+            <table id="ancfxTable"><thead><tr><th>Date</th><th>NAV</th><th>Distribution</th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <!-- AGTHX Data Tab -->
+        <div class="tab">
+            <h2>AGTHX NAV & Distributions</h2>
+            <table id="agthxTable"><thead><tr><th>Date</th><th>NAV</th><th>Distribution</th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <!-- AFAXX Distributions Tab -->
+        <div class="tab">
+            <h2>AFAXX Distributions</h2>
+            <table id="afaxxTable"><thead><tr><th>Date</th><th>Rate</th></tr></thead><tbody></tbody></table>
+        </div>
     </div>
 
     <script>
-        const FUNDS = ['ANCFX', 'AGTHX'];
-        const PROXIES = [
-            "https://corsproxy.io/?", 
-            "https://api.allorigins.win/get?url=",
-            "https://thingproxy.freeboard.io/fetch/",
-            "https://cors-anywhere.herokuapp.com/",
-            "https://crossorigin.me/",
-            "https://yacdn.org/serve/",
-            "https://api.codetabs.com/v1/proxy/?quest="
-        ];
-        let debugLog = [];
+        let chart;
 
-        async function fetchWithRetry(url, maxAttempts = 3, initialDelay = 1000) {
-            for (let proxyIndex = 0; proxyIndex < PROXIES.length; proxyIndex++) {
-                const proxyUrl = PROXIES[proxyIndex] + encodeURIComponent(url);
-                
-                for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                    try {
-                        const start = Date.now();
-                        debugLog.push(`🔵 Proxy ${proxyIndex + 1}/${PROXIES.length} - Attempt ${attempt + 1}/${maxAttempts}\nURL: ${proxyUrl}`);
-                        
-                        const response = await fetch(proxyUrl, { cache: 'no-cache' });
-                        const latency = Date.now() - start;
-                        debugLog.push(`Status: ${response.status} • Latency: ${latency}ms`);
-
-                        if (!response.ok) {
-                            throw new Error(`HTTP error: ${response.status}`);
-                        }
-
-                        const text = await response.text();
-                        try {
-                            return JSON.parse(text).contents || text;
-                        } catch {
-                            return text;
-                        }
-                    } catch (error) {
-                        debugLog.push(`🔴 Proxy ${proxyIndex + 1} - Attempt ${attempt + 1} error: ${error.message}`);
-                        if (attempt < maxAttempts - 1) {
-                            const delay = initialDelay * Math.pow(2, attempt);
-                            debugLog.push(`⏱️ Waiting ${delay}ms before retry...`);
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                        }
-                    }
-                }
-            }
-            throw new Error('All proxies and retry attempts failed');
+        function switchTab(index) {
+            document.querySelectorAll('.tab').forEach((tab, i) => tab.classList.toggle('active', i === index));
+            document.querySelectorAll('.tab-btn').forEach((btn, i) => btn.classList.toggle('active', i === index));
         }
 
-        async function fetchYahooFinanceData(fund) {
-            const startDate = new Date('2024-01-01');
-            const endDate = new Date();
-            endDate.setDate(endDate.getDate() - 1);
-            const period1 = Math.floor(startDate.getTime() / 1000);
-            const period2 = Math.floor(endDate.getTime() / 1000);
-
-            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${fund}?period1=${period1}&period2=${period2}&interval=1d`;
-
-            try {
-                const data = await fetchWithRetry(url);
-                debugLog.push(`✅ Fetched ${fund} data from Yahoo Finance.`);
-                return data.chart?.result?.[0] || null;
-            } catch (error) {
-                debugLog.push(`⚠️ Error fetching ${fund} data: ${error.message}`);
-                return null;
-            }
+        async function fetchFundData(fund) {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${fund}?interval=1d`;
+            const response = await fetch(url);
+            const data = await response.json();
+            return data.chart.result[0];
         }
 
-        async function loadAllFundsData() {
-            debugLog.push("🚀 Starting data retrieval...");
-
-            let fundData = {};
-            for (let fund of FUNDS) {
-                let result = await fetchYahooFinanceData(fund);
-                if (result) {
-                    fundData[fund] = result;
-                }
-            }
-
-            try {
-                const distributions = await loadFundDistributionData('distributions.txt');
-                debugLog.push(`✅ Successfully loaded distributions from distributions.txt.`);
-                fundData['distributions'] = distributions;
-            } catch (error) {
-                debugLog.push(`⚠️ Error loading distributions: ${error.message}`);
-            }
-
-            document.getElementById('debug').textContent = debugLog.join('\n\n');
-            console.log(fundData);
+        async function loadDistributions() {
+            return await loadFundDistributionData('distributions.txt');
         }
 
-        window.onload = loadAllFundsData;
+        async function loadData() {
+            const [ancfxData, agthxData, distributions] = await Promise.all([
+                fetchFundData('ANCFX'),
+                fetchFundData('AGTHX'),
+                loadDistributions()
+            ]);
+
+            populateTable('ancfxTable', ancfxData, distributions.ANCFX.distributions);
+            populateTable('agthxTable', agthxData, distributions.AGTHX.distributions);
+            populateAFAXXTable('afaxxTable', distributions.AFAXX.rates);
+        }
+
+        function populateTable(tableId, navData, distData) {
+            const tbody = document.getElementById(tableId).querySelector('tbody');
+            tbody.innerHTML = "";
+            const timestamps = navData.timestamp;
+            const navs = navData.indicators.quote[0].close;
+            timestamps.forEach((time, i) => {
+                const date = new Date(time * 1000).toISOString().split('T')[0];
+                const nav = navs[i]?.toFixed(2) || "N/A";
+                const dist = distData.find(d => d.Date === date)?.Distribution || "-";
+                tbody.innerHTML += `<tr><td>${date}</td><td>${nav}</td><td>${dist}</td></tr>`;
+            });
+        }
+
+        function populateAFAXXTable(tableId, afaxxRates) {
+            const tbody = document.getElementById(tableId).querySelector('tbody');
+            tbody.innerHTML = "";
+            afaxxRates.forEach(entry => {
+                tbody.innerHTML += `<tr><td>${entry.date}</td><td>${entry.rate}</td></tr>`;
+            });
+        }
+
+        function updateChart() {
+            const ctx = document.getElementById('portfolioChart').getContext('2d');
+            if (chart) chart.destroy();
+
+            const mmfUnits = parseFloat(document.getElementById('mmfUnits').value);
+            const ancfxShares = parseFloat(document.getElementById('ancfxShares').value);
+            const agthxShares = parseFloat(document.getElementById('agthxShares').value);
+
+            // Mock data (replace with actual calculations)
+            const dates = ["2024-12-30", "2025-01-01", "2025-01-15", "2025-02-01"];
+            const mmfValues = [mmfUnits, mmfUnits * 1.01, mmfUnits * 1.02, mmfUnits * 1.03];
+            const mutualFundValues = [ancfxShares * 50 + agthxShares * 60, ancfxShares * 51 + agthxShares * 61, ancfxShares * 52 + agthxShares * 62, ancfxShares * 53 + agthxShares * 63];
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [
+                        { label: 'MMF Portfolio', data: mmfValues, borderColor: 'blue', fill: false },
+                        { label: 'Mutual Fund Portfolio', data: mutualFundValues, borderColor: 'green', fill: false }
+                    ]
+                },
+                options: { responsive: true }
+            });
+        }
+
+        loadData();
+        updateChart();
     </script>
 </body>
 </html>
