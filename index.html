@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Fund Data Loader</title>
+    <title>Fund Data Viewer</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -75,55 +75,12 @@
             background-color: #6c757d;
             cursor: not-allowed;
         }
-        .filters {
-            margin: 1rem 0;
-            padding: 1rem;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-        .filters label {
-            font-weight: bold;
-        }
-        .filters input[type="date"] {
-            padding: 0.5rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
         #summary {
             margin-top: 1rem;
             padding: 0.5rem;
             background-color: #e9f7fd;
             border-radius: 4px;
             color: #0069d9;
-        }
-        .retry-button {
-            background-color: #28a745;
-        }
-        .retry-button:hover {
-            background-color: #218838;
-        }
-        .fund-status {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.875rem;
-            margin-left: 0.5rem;
-        }
-        .status-success {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .status-pending {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-        .status-error {
-            background-color: #f8d7da;
-            color: #721c24;
         }
         .progress-container {
             width: 100%;
@@ -139,145 +96,120 @@
             transition: width 0.3s;
         }
         /* Tab styles */
-        .tabs {
-            margin-top: 2rem;
-            border-bottom: 1px solid #dee2e6;
-        }
-        .tab-buttons {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: -1px;
-        }
-        .tab-button {
-            padding: 0.75rem 1.25rem;
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-bottom: none;
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
             border-radius: 4px 4px 0 0;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
             cursor: pointer;
-            transition: background-color 0.2s;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 16px;
+            color: #333;
         }
-        .tab-button:hover {
-            background-color: #e9ecef;
+        .tab button:hover {
+            background-color: #ddd;
         }
-        .tab-button.active {
-            background-color: white;
-            border-bottom: 2px solid white;
-            font-weight: bold;
-            color: #007bff;
+        .tab button.active {
+            background-color: #007bff;
+            color: white;
         }
-        .tab-content {
+        .tabcontent {
             display: none;
-            padding: 1.5rem 0;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            animation: fadeEffect 1s;
         }
-        .tab-content.active {
-            display: block;
+        @keyframes fadeEffect {
+            from {opacity: 0;}
+            to {opacity: 1;}
         }
     </style>
 </head>
 <body>
     <div id="container">
-        <h1>Mutual Fund Data Loader</h1>
-        <div id="loading">🚀 Initializing...</div>
+        <h1>Mutual Fund Data Viewer</h1>
+        <div id="loading">🚀 Loading distribution data...</div>
         <div id="error"></div>
         <div id="summary" style="display:none;"></div>
-        <div class="progress-container" id="progressContainer" style="display:none;">
+        <div class="progress-container" id="progressContainer">
             <div class="progress-bar" id="progressBar"></div>
         </div>
-        <div id="fundStatus" style="margin-top: 1rem; display:none;"></div>
-        <div id="filters" class="filters" style="display:none;">
-            <label for="startDateFilter">Show Data From:</label>
-            <input type="date" id="startDateFilter">
-            <button id="applyFilter">Apply Filter</button>
-            <button id="resetFilter">Reset Filter</button>
-            
-            <label for="textFileUrl" style="margin-left: 1rem;">Distribution Data URL:</label>
-            <input type="text" id="textFileUrl" placeholder="distributions.txt" value="distributions.txt" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; width: 200px;">
-            <button id="loadDistributionsBtn">Load Distribution Data</button>
-        </div>
-        <div id="debug"></div>
-
-        <!-- Tab navigation -->
-        <div class="tabs" id="fundTabs" style="display:none;">
-            <div class="tab-buttons">
-                <button class="tab-button active" data-tab="yahooData">Yahoo Finance Data</button>
-                <button class="tab-button" data-tab="ancfx">ANCFX</button>
-                <button class="tab-button" data-tab="agthx">AGTHX</button>
-                <button class="tab-button" data-tab="afaxx">AFAXX</button>
-            </div>
-            
-            <!-- Yahoo Finance data tab -->
-            <div class="tab-content active" id="yahooData">
-                <table id="dataTable">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>ANCFX NAV</th>
-                            <th>ANCFX Distribution</th>
-                            <th>AGTHX NAV</th>
-                            <th>AGTHX Distribution</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody"></tbody>
-                </table>
-            </div>
-            
-            <!-- ANCFX tab -->
-            <div class="tab-content" id="ancfx">
-                <h2>ANCFX Distributions</h2>
-                <div id="ancfxContent">
-                    <p>Load distribution data to view ANCFX details.</p>
-                </div>
-            </div>
-            
-            <!-- AGTHX tab -->
-            <div class="tab-content" id="agthx">
-                <h2>AGTHX Distributions</h2>
-                <div id="agthxContent">
-                    <p>Load distribution data to view AGTHX details.</p>
-                </div>
-            </div>
-            
-            <!-- AFAXX tab -->
-            <div class="tab-content" id="afaxx">
-                <h2>AFAXX Rates</h2>
-                <div id="afaxxContent">
-                    <p>Load distribution data to view AFAXX rates.</p>
-                </div>
-            </div>
+        
+        <!-- Tab Navigation -->
+        <div class="tab" id="fundTabs" style="display:none;">
+            <button class="tablinks" onclick="openFundTab(event, 'ANCFX')" id="defaultOpen">ANCFX</button>
+            <button class="tablinks" onclick="openFundTab(event, 'AGTHX')">AGTHX</button>
+            <button class="tablinks" onclick="openFundTab(event, 'AFAXX')">AFAXX</button>
         </div>
         
+        <!-- Tab Content -->
+        <div id="ANCFX" class="tabcontent">
+            <h2>ANCFX Fund Data</h2>
+            <table id="ancfxTable">
+                <thead id="ancfxTableHead"></thead>
+                <tbody id="ancfxTableBody"></tbody>
+            </table>
+        </div>
+        
+        <div id="AGTHX" class="tabcontent">
+            <h2>AGTHX Fund Data</h2>
+            <table id="agthxTable">
+                <thead id="agthxTableHead"></thead>
+                <tbody id="agthxTableBody"></tbody>
+            </table>
+        </div>
+        
+        <div id="AFAXX" class="tabcontent">
+            <h2>AFAXX Fund Data</h2>
+            <table id="afaxxTable">
+                <thead>
+                    <tr>
+                        <th>Rate</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="afaxxTableBody"></tbody>
+            </table>
+        </div>
+        
+        <div id="debug"></div>
+        
         <div class="action-buttons" id="buttonContainer" style="display:none;">
-            <button id="downloadBtn">Download Table as HTML</button>
-            <button id="retryBtn" class="retry-button" style="display:none;">Retry Failed Funds</button>
+            <button id="downloadBtn">Download Data as HTML</button>
         </div>
     </div>
 
     <script>
-        // More reliable proxy list (expanded)
-        const PROXIES = [
-            "https://corsproxy.io/?", 
-            "https://api.allorigins.win/get?url=",
-            "https://thingproxy.freeboard.io/fetch/",
-            "https://cors-anywhere.herokuapp.com/",
-            "https://crossorigin.me/",
-            "https://yacdn.org/serve/",
-            "https://api.codetabs.com/v1/proxy/?quest="
-        ];
-
-        const FUNDS = ['ANCFX', 'AGTHX'];
+        // Debug logging
         let debugLog = [];
-        let fundData = {}; // Object to store data by date for each fund
-        let currentFilterStartDate = null;
-        let fundStatus = {}; // Track loading status for each fund
-        let failedFunds = []; // Track which funds failed to load
-        let distributionData = null; // Store parsed distribution data
-
-        // Initialize fund status
-        FUNDS.forEach(fund => {
-            fundStatus[fund] = { status: 'pending', attempts: 0 };
-        });
-
+        
+        function log(message) {
+            console.log(message);
+            debugLog.push(message);
+            document.getElementById('debug').textContent = debugLog.join('\n\n');
+        }
+        
+        function updateProgress(percent) {
+            document.getElementById('progressBar').style.width = `${percent}%`;
+        }
+        
+        function showError(message) {
+            document.getElementById('error').innerHTML = `❌ Error: ${message}`;
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        // ---- Functions from fund-distribution-parser.js ----
+        
         /**
          * Loads and parses fund distribution data from a text file
          * @param {string} fileUrl - URL of the distributions text file to load
@@ -398,398 +330,263 @@
             }
             return dateString;
         }
-
-        // Add exponential backoff retry logic
-        async function fetchWithRetry(url, maxAttempts = 3, initialDelay = 1000) {
-            for (let proxyIndex = 0; proxyIndex < PROXIES.length; proxyIndex++) {
-                const proxyUrl = PROXIES[proxyIndex] + encodeURIComponent(url);
-                
-                for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                    try {
-                        const start = Date.now();
-                        debugLog.push(
-                            `🔵 Proxy ${proxyIndex + 1}/${PROXIES.length} - Attempt ${attempt + 1}/${maxAttempts}\n` +
-                            `URL: ${proxyUrl}`
-                        );
-                        
-                        const response = await fetch(proxyUrl, {
-                            method: 'GET',
-                            headers: {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                            },
-                            cache: 'no-cache'
-                        });
-                        
-                        const latency = Date.now() - start;
-                        debugLog.push(`Status: ${response.status} • Latency: ${latency}ms`);
-
-                        if (!response.ok) {
-                            throw new Error(`HTTP error: ${response.status}`);
-                        }
-
-                        // Try to handle different response formats
-                        let data;
-                        const contentType = response.headers.get('content-type');
-                        if (contentType && contentType.includes('application/json')) {
-                            data = await response.json();
-                        } else {
-                            const text = await response.text();
-                            try {
-                                data = JSON.parse(text);
-                            } catch (e) {
-                                data = text;
-                            }
-                        }
-                        
-                        return data.contents || data;
-                    } catch (error) {
-                        debugLog.push(`🔴 Proxy ${proxyIndex + 1} - Attempt ${attempt + 1} error: ${error.message}`);
-                        
-                        // If this is not the last attempt, wait before retrying
-                        if (attempt < maxAttempts - 1) {
-                            const delay = initialDelay * Math.pow(2, attempt);
-                            debugLog.push(`⏱️ Waiting ${delay}ms before retry...`);
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                        }
-                    }
-                }
+        
+        // ---- Tab functionality ----
+        
+        function openFundTab(evt, fundName) {
+            // Hide all tab content
+            let i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
             }
-            throw new Error('All proxies and retry attempts failed');
+            
+            // Remove "active" class from all tab buttons
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            
+            // Show the current tab and add "active" class to the button
+            document.getElementById(fundName).style.display = "block";
+            evt.currentTarget.className += " active";
         }
-
-        // Helper function to update progress
-        function updateProgress() {
-            const total = FUNDS.length * 2; // NAV and dividend data for each fund
-            let completed = 0;
-            
-            // Count completed operations
-            FUNDS.forEach(fund => {
-                if (fundStatus[fund].navLoaded) completed++;
-                if (fundStatus[fund].divLoaded) completed++;
-            });
-            
-            const percentage = Math.round((completed / total) * 100);
-            document.getElementById('progressBar').style.width = `${percentage}%`;
-        }
-
-        // Update the fund status display
-        function updateFundStatusDisplay() {
-            const statusDiv = document.getElementById('fundStatus');
-            statusDiv.innerHTML = '';
-            
-            FUNDS.forEach(fund => {
-                const status = fundStatus[fund];
-                let statusClass = 'status-pending';
-                let statusText = 'Pending';
-                
-                if (status.status === 'success') {
-                    statusClass = 'status-success';
-                    statusText = 'Loaded';
-                } else if (status.status === 'error') {
-                    statusClass = 'status-error';
-                    statusText = `Failed (${status.attempts} attempts)`;
-                } else if (status.status === 'loading') {
-                    statusText = 'Loading...';
-                }
-                
-                statusDiv.innerHTML += `
-                    <div>
-                        <strong>${fund}</strong>
-                        <span class="fund-status ${statusClass}">${statusText}</span>
-                    </div>
-                `;
-            });
-            
-            statusDiv.style.display = 'block';
-        }
-
-        async function loadFundData(fund, isRetry = false) {
+        
+        // ---- Function to render fund data ----
+        
+        function renderFundData(data) {
             try {
-                if (!isRetry) {
-                    fundStatus[fund] = { status: 'loading', attempts: 0, navLoaded: false, divLoaded: false };
-                }
-                
-                fundStatus[fund].attempts++;
-                updateFundStatusDisplay();
-                updateLoading(`Fetching ${fund} data (Attempt ${fundStatus[fund].attempts})...`);
-                
-                // Calculate date range (Jan 1, 2024 to yesterday)
-                const startDate = new Date('2024-01-01');
-                const endDate = new Date();
-                endDate.setDate(endDate.getDate() - 1);
-                const period1 = Math.floor(startDate.getTime() / 1000);
-                const period2 = Math.floor(endDate.getTime() / 1000);
-
-                // Try to fetch NAV data with multiple attempts
-                let navSuccess = false;
-                try {
-                    // Fetch NAV data
-                    const navUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${fund}?period1=${period1}&period2=${period2}&interval=1d`;
-                    let navResponse = await fetchWithRetry(navUrl, 3, 1000);
+                // Render ANCFX data
+                if (data.ANCFX && data.ANCFX.distributions.length > 0) {
+                    const headers = data.ANCFX.headers;
                     
-                    // Ensure navResponse is properly parsed
-                    let navParsed;
-                    if (typeof navResponse === 'string') {
-                        try {
-                            navParsed = JSON.parse(navResponse);
-                        } catch (error) {
-                            debugLog.push(`⚠️ Failed to parse NAV response for ${fund}: ${error.message}`);
-                            debugLog.push(`Response sample: ${navResponse.substring(0, 100)}...`);
-                            throw new Error(`Failed to parse NAV data for ${fund}`);
-                        }
-                    } else {
-                        navParsed = navResponse;
-                    }
-                    
-                    if (!navParsed.chart?.result?.length) {
-                        debugLog.push(`⚠️ No NAV data available for ${fund}`);
-                        throw new Error(`No NAV data available for ${fund}`);
-                    }
-
-                    const result = navParsed.chart.result[0];
-                    const timestamps = result.timestamp;
-                    const closes = result.indicators.quote[0].close;
-
-                    // Process NAV data
-                    timestamps.forEach((ts, i) => {
-                        const date = new Date(ts * 1000).toISOString().split('T')[0];
-                        if (!fundData[date]) {
-                            fundData[date] = {};
-                        }
-                        
-                        fundData[date][`${fund}_nav`] = closes[i] ? closes[i].toFixed(2) : null;
+                    // Create table header
+                    let headerHTML = '<tr>';
+                    headers.forEach(header => {
+                        headerHTML += `<th>${header}</th>`;
                     });
-
-                    fundStatus[fund].navLoaded = true;
-                    navSuccess = true;
-                    debugLog.push(`✅ ${fund} NAV data retrieved. Timestamps: ${timestamps.length}`);
-                } catch (error) {
-                    debugLog.push(`⚠️ Error loading NAV data for ${fund}: ${error.message}`);
-                }
-
-                // Try to fetch dividend data independently from NAV data
-                let divSuccess = false;
-                try {
-                    // Fetch dividend data with multiple retries
-                    const divUrl = `https://query1.finance.yahoo.com/v7/finance/download/${fund}?period1=${period1}&period2=${period2}&events=div`;
-                    const divResponse = await fetchWithRetry(divUrl, 3, 1000);
+                    headerHTML += '</tr>';
+                    document.getElementById('ancfxTableHead').innerHTML = headerHTML;
                     
-                    // Process dividend data
-                    let divText;
-                    if (typeof divResponse === 'string') {
-                        divText = divResponse;
-                    } else if (divResponse.contents) {
-                        divText = divResponse.contents;
-                    }
-
-                    if (divText) {
-                        const dividends = {};
-                        divText.split('\n').slice(1).forEach(row => {
-                            if (row) {
-                                const [date, amount] = row.split(',');
-                                if (date && amount) dividends[date] = parseFloat(amount).toFixed(3);
+                    // Create table rows
+                    let rowsHTML = '';
+                    data.ANCFX.distributions.forEach(dist => {
+                        rowsHTML += '<tr>';
+                        headers.forEach(header => {
+                            let value = dist[header] || '';
+                            
+                            // Format dates if applicable
+                            if (header.toLowerCase().includes('date')) {
+                                value = formatDate(value);
                             }
+                            
+                            rowsHTML += `<td>${value}</td>`;
                         });
-
-                        // Store dividend data
-                        Object.keys(dividends).forEach(date => {
-                            if (!fundData[date]) {
-                                fundData[date] = {};
+                        rowsHTML += '</tr>';
+                    });
+                    document.getElementById('ancfxTableBody').innerHTML = rowsHTML;
+                    
+                    log(`Rendered ${data.ANCFX.distributions.length} ANCFX distributions`);
+                }
+                
+                // Render AGTHX data
+                if (data.AGTHX && data.AGTHX.distributions.length > 0) {
+                    const headers = data.AGTHX.headers;
+                    
+                    // Create table header
+                    let headerHTML = '<tr>';
+                    headers.forEach(header => {
+                        headerHTML += `<th>${header}</th>`;
+                    });
+                    headerHTML += '</tr>';
+                    document.getElementById('agthxTableHead').innerHTML = headerHTML;
+                    
+                    // Create table rows
+                    let rowsHTML = '';
+                    data.AGTHX.distributions.forEach(dist => {
+                        rowsHTML += '<tr>';
+                        headers.forEach(header => {
+                            let value = dist[header] || '';
+                            
+                            // Format dates if applicable
+                            if (header.toLowerCase().includes('date')) {
+                                value = formatDate(value);
                             }
-                            fundData[date][`${fund}_div`] = dividends[date];
+                            
+                            rowsHTML += `<td>${value}</td>`;
                         });
-
-                        fundStatus[fund].divLoaded = true;
-                        divSuccess = true;
-                        debugLog.push(`✅ ${fund} dividend data retrieved. Entries: ${Object.keys(dividends).length}`);
-                    } else {
-                        debugLog.push(`ℹ️ No dividend data found for ${fund}`);
-                        fundStatus[fund].divLoaded = true;
-                        divSuccess = true;
-                    }
-                } catch (error) {
-                    debugLog.push(`⚠️ Error loading dividend data for ${fund}: ${error.message}`);
+                        rowsHTML += '</tr>';
+                    });
+                    document.getElementById('agthxTableBody').innerHTML = rowsHTML;
+                    
+                    log(`Rendered ${data.AGTHX.distributions.length} AGTHX distributions`);
                 }
-
-                // Update fund status based on overall success
-                if (navSuccess && divSuccess) {
-                    fundStatus[fund].status = 'success';
-                    // Remove from failed funds list if it was there
-                    failedFunds = failedFunds.filter(f => f !== fund);
-                } else {
-                    // If either NAV or dividend data failed, consider it an error
-                    // but keep any partial data we might have received
-                    fundStatus[fund].status = 'error';
-                    if (!failedFunds.includes(fund)) {
-                        failedFunds.push(fund);
-                    }
-                }
-
-                updateFundStatusDisplay();
-                updateProgress();
-
-            } catch (error) {
-                debugLog.push(`⚠️ Critical error processing ${fund}: ${error.message}`);
-                fundStatus[fund].status = 'error';
-                if (!failedFunds.includes(fund)) {
-                    failedFunds.push(fund);
-                }
-                updateFundStatusDisplay();
-                updateProgress();
-            }
-        }
-
-        function generateTableRows(startDate = null) {
-            // Get all dates and sort them in descending order
-            let dates = Object.keys(fundData).sort((a, b) => new Date(b) - new Date(a));
-            
-            // Filter dates if startDate is provided
-            if (startDate) {
-                const startDateObj = new Date(startDate);
-                dates = dates.filter(date => new Date(date) >= startDateObj);
-            }
-            
-            // Generate the table rows
-            return dates.map(date => {
-                const data = fundData[date] || {};
-                return `<tr>
-                    <td>${date}</td>
-                    <td>${data.ANCFX_nav ? '$' + data.ANCFX_nav : 'N/A'}</td>
-                    <td>${data.ANCFX_div ? '$' + data.ANCFX_div : '-'}</td>
-                    <td>${data.AGTHX_nav ? '$' + data.AGTHX_nav : 'N/A'}</td>
-                    <td>${data.AGTHX_div ? '$' + data.AGTHX_div : '-'}</td>
-                </tr>`;
-            });
-        }
-
-        function updateTable(startDate = null) {
-            currentFilterStartDate = startDate;
-            const rows = generateTableRows(startDate);
-            
-            document.getElementById('tableBody').innerHTML = rows.join('');
-            
-            // Update summary
-            const summaryElement = document.getElementById('summary');
-            if (rows.length === 0) {
-                summaryElement.textContent = 'No data found for the selected date range.';
-            } else {
-                const dateRange = startDate ? 
-                    `${startDate} to ${new Date().toISOString().split('T')[0]}` : 
-                    `All available data (${Object.keys(fundData).length} days)`;
                 
-                // Add information about loaded and failed funds
-                const loadedFunds = FUNDS.filter(fund => fundStatus[fund].status === 'success').length;
-                const failedFundsCount = failedFunds.length;
-                
-                summaryElement.textContent = `Showing ${rows.length} days of data • Range: ${dateRange} • Funds loaded: ${loadedFunds}/${FUNDS.length}`;
-                if (failedFundsCount > 0) {
-                    summaryElement.textContent += ` • ${failedFundsCount} fund(s) failed to load completely`;
-                    document.getElementById('retryBtn').style.display = 'block';
-                } else {
-                    document.getElementById('retryBtn').style.display = 'none';
-                }
-            }
-            summaryElement.style.display = 'block';
-        }
-
-        // Function to render distribution data in tabs
-        function renderDistributionTabs(data) {
-            if (!data) return;
-            
-            // Render ANCFX tab
-            const ancfxTable = document.createElement('table');
-            const ancfxHeaders = data.ANCFX.headers;
-            
-            let ancfxHeadersHTML = '<tr>';
-            ancfxHeaders.forEach(header => {
-                ancfxHeadersHTML += `<th>${header}</th>`;
-            });
-            ancfxHeadersHTML += '</tr>';
-            
-            let ancfxRowsHTML = '';
-            data.ANCFX.distributions.forEach(dist => {
-                let rowHTML = '<tr>';
-                ancfxHeaders.forEach(header => {
-                    rowHTML += `<td>${dist[header] || '-'}</td>`;
-                });
-                rowHTML += '</tr>';
-                ancfxRowsHTML += rowHTML;
-            });
-            
-            ancfxTable.innerHTML = `<thead>${ancfxHeadersHTML}</thead><tbody>${ancfxRowsHTML}</tbody>`;
-            document.getElementById('ancfxContent').innerHTML = '';
-            document.getElementById('ancfxContent').appendChild(ancfxTable);
-            
-            // Render AGTHX tab
-            const agthxTable = document.createElement('table');
-            const agthxHeaders = data.AGTHX.headers;
-            
-            let agthxHeadersHTML = '<tr>';
-            agthxHeaders.forEach(header => {
-                agthxHeadersHTML += `<th>${header}</th>`;
-            });
-            agthxHeadersHTML += '</tr>';
-            
-            let agthxRowsHTML = '';
-            data.AGTHX.distributions.forEach(dist => {
-                let rowHTML = '<tr>';
-                agthxHeaders.forEach(header => {
-                    rowHTML += `<td>${dist[header] || '-'}</td>`;
-                });
-                rowHTML += '</tr>';
-                agthxRowsHTML += rowHTML;
-            });
-            
-            agthxTable.innerHTML = `<thead>${agthxHeadersHTML}</thead><tbody>${agthxRowsHTML}</tbody>`;
-            document.getElementById('agthxContent').innerHTML = '';
-            document.getElementById('agthxContent').appendChild(agthxTable);
-            
-            // Render AFAXX tab
-            const afaxxTable = document.createElement('table');
-            afaxxTable.innerHTML = `
-                <thead>
-                    <tr>
-                        <th>Rate</th>
-                        <th>Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${data.AFAXX.rates.map(rate => `
-                        <tr>
+                // Render AFAXX data
+                if (data.AFAXX && data.AFAXX.rates.length > 0) {
+                    let rowsHTML = '';
+                    data.AFAXX.rates.forEach(rate => {
+                        rowsHTML += `<tr>
                             <td>${rate.rate}</td>
                             <td>${formatDate(rate.date)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            `;
-            document.getElementById('afaxxContent').innerHTML = '';
-            document.getElementById('afaxxContent').appendChild(afaxxTable);
-        }
-
-        // Load distribution data from text file
-        async function loadDistributions() {
-            try {
-                const fileUrl = document.getElementById('textFileUrl').value.trim();
-                if (!fileUrl) {
-                    throw new Error('Please enter a valid URL for the distributions file');
+                        </tr>`;
+                    });
+                    document.getElementById('afaxxTableBody').innerHTML = rowsHTML;
+                    
+                    log(`Rendered ${data.AFAXX.rates.length} AFAXX rates`);
                 }
                 
-                updateLoading(`Loading distribution data from ${fileUrl}...`);
+                // Update summary
+                document.getElementById('summary').innerHTML = `
+                    <strong>Fund Data Loaded:</strong>
+                    ANCFX: ${data.ANCFX.distributions.length} distributions |
+                    AGTHX: ${data.AGTHX.distributions.length} distributions |
+                    AFAXX: ${data.AFAXX.rates.length} rates
+                `;
+                document.getElementById('summary').style.display = 'block';
                 
-                const data = await loadFundDistributionData(fileUrl);
-                debugLog.push(`✅ Successfully loaded distribution data.`);
-                debugLog.push(`ANCFX: ${data.ANCFX.distributions.length} distributions`);
-                debugLog.push(`AGTHX: ${data.AGTHX.distributions.length} distributions`);
-                debugLog.push(`AFAXX: ${data.AFAXX.rates.length} rates`);
+                // Show tabs and hide loading
+                document.getElementById('fundTabs').style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('buttonContainer').style.display = 'flex';
                 
-                // Store distribution data globally
-                distributionData = data;
+                // Open default tab
+                document.getElementById('defaultOpen').click();
                 
-                // Render tabs with distribution data
-                renderDistributionTabs(data);
-                
-                updateLoading('Distribution data loaded successfully!');
-                document.getElementById('debug').textContent = debugLog.join('\n\n');
             } catch (error) {
-                debugLog.push(`❌ Error loading distribution data: ${error.message}`);
-                document.
+                showError(`Failed to render fund data: ${error.message}`);
+                log(`Error rendering data: ${error.stack}`);
+            }
+        }
+        
+        // Download function
+        function downloadDataAsHTML() {
+            const data = {
+                ANCFX: {
+                    headers: Array.from(document.querySelectorAll('#ancfxTableHead th')).map(th => th.textContent),
+                    rows: Array.from(document.querySelectorAll('#ancfxTableBody tr')).map(row => 
+                        Array.from(row.querySelectorAll('td')).map(td => td.textContent)
+                    )
+                },
+                AGTHX: {
+                    headers: Array.from(document.querySelectorAll('#agthxTableHead th')).map(th => th.textContent),
+                    rows: Array.from(document.querySelectorAll('#agthxTableBody tr')).map(row => 
+                        Array.from(row.querySelectorAll('td')).map(td => td.textContent)
+                    )
+                },
+                AFAXX: {
+                    headers: ['Rate', 'Date'],
+                    rows: Array.from(document.querySelectorAll('#afaxxTableBody tr')).map(row => 
+                        Array.from(row.querySelectorAll('td')).map(td => td.textContent)
+                    )
+                }
+            };
+            
+            const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fund Distribution Data</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1, h2 { color: #333; }
+        .info { color: #666; margin-bottom: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; margin-bottom: 40px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Fund Distribution Data</h1>
+    <div class="info">
+        <p>Generated on: ${new Date().toLocaleString()}</p>
+    </div>
+    
+    <h2>ANCFX Fund Data</h2>
+    <table>
+        <thead>
+            <tr>
+                ${data.ANCFX.headers.map(h => `<th>${h}</th>`).join('')}
+            </tr>
+        </thead>
+        <tbody>
+            ${data.ANCFX.rows.map(row => `
+                <tr>
+                    ${row.map(cell => `<td>${cell}</td>`).join('')}
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+    
+    <h2>AGTHX Fund Data</h2>
+    <table>
+        <thead>
+            <tr>
+                ${data.AGTHX.headers.map(h => `<th>${h}</th>`).join('')}
+            </tr>
+        </thead>
+        <tbody>
+            ${data.AGTHX.rows.map(row => `
+                <tr>
+                    ${row.map(cell => `<td>${cell}</td>`).join('')}
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+    
+    <h2>AFAXX Fund Data</h2>
+    <table>
+        <thead>
+            <tr>
+                ${data.AFAXX.headers.map(h => `<th>${h}</th>`).join('')}
+            </tr>
+        </thead>
+        <tbody>
+            ${data.AFAXX.rows.map(row => `
+                <tr>
+                    ${row.map(cell => `<td>${cell}</td>`).join('')}
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+</body>
+</html>`;
+            
+            // Create a Blob and download link
+            const blob = new Blob([html], {type: 'text/html'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'fund_distribution_data.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // ---- Initialize the application ----
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            log('Application started');
+            updateProgress(10);
+            
+            // Load the distribution data
+            loadFundDistributionData('distributions.txt')
+                .then(data => {
+                    log('Successfully loaded distribution data');
+                    updateProgress(100);
+                    renderFundData(data);
+                })
+                .catch(error => {
+                    showError(`Failed to load distribution data: ${error.message}`);
+                    log(`Error: ${error.stack}`);
+                    updateProgress(100);
+                });
+                
+            // Setup event listeners
+            document.getElementById('downloadBtn').addEventListener('click', downloadDataAsHTML);
+        });
+    </script>
+</body>
+</html>
