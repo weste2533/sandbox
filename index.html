@@ -2,485 +2,170 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Portfolio Comparison Dashboard</title>
-    <script src="fund-distribution-parser.js" defer></script>
+    <title>Fund Data Loader</title>
+    <script src="fund-distribution-parser.js" defer></script> 
     <style>
-        /* Keep all original CSS styles unchanged */
-        :root {
-            --bg-primary: #121212;
-            --bg-secondary: #1e1e1e;
-            --bg-tertiary: #2d2d2d;
-            --text-primary: #e0e0e0;
-            --text-secondary: #a0a0a0;
-            --accent: #6e56cf;
-            --accent-hover: #7c66d6;
-            --danger: #dc3545;
-            --success: #28a745;
-            --warning: #ffc107;
-            --info: #17a2b8;
-            --border: #333333;
-            --card-bg: #1e1e1e;
-        }
+        body { font-family: Arial, sans-serif; margin: 2rem; background-color: #f5f5f5; }
+        #container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        #debug { font-family: monospace; white-space: pre-wrap; background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; max-height: 400px; overflow: auto; }
         
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: 2rem;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border);
-        }
-        
-        .header h1 {
-            font-size: 1.8rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-        
-        .header .status {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background-color: var(--bg-tertiary);
-            border-radius: 4px;
-            font-size: 0.85rem;
-        }
-        
-        .status.loading {
-            color: var(--warning);
-        }
-        
-        .status.success {
-            color: var(--success);
-        }
-        
-        .status.error {
-            color: var(--danger);
-        }
-        
+        /* Tab Styles */
         .tabs {
             display: flex;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #ddd;
         }
-        
         .tab {
-            padding: 0.8rem 1.5rem;
+            padding: 0.5rem 1rem;
             cursor: pointer;
-            color: var(--text-secondary);
-            font-weight: 500;
-            transition: all 0.2s ease;
-            border-bottom: 2px solid transparent;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            margin-right: 4px;
+            background-color: #f8f8f8;
         }
-        
-        .tab:hover {
-            color: var(--text-primary);
-        }
-        
         .tab.active {
-            color: var(--accent);
-            border-bottom: 2px solid var(--accent);
+            border-color: #ddd;
+            background-color: white;
+            font-weight: bold;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
         }
-        
         .tab-content {
             display: none;
         }
-        
         .tab-content.active {
             display: block;
         }
         
-        .card {
-            background-color: var(--card-bg);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 0.8rem;
-            border-bottom: 1px solid var(--border);
-        }
-        
-        .card-title {
-            font-size: 1.2rem;
-            font-weight: 600;
-        }
-        
-        .inputs-group {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        
-        .input-container {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        
-        .input-container label {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-        
-        .input-container input {
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 0.75rem;
-            color: var(--text-primary);
-            font-size: 1rem;
-            outline: none;
-            transition: border-color 0.2s ease;
-        }
-        
-        .input-container input:focus {
-            border-color: var(--accent);
-        }
-        
-        .chart-container {
-            width: 100%;
-            height: 400px;
-            background-color: var(--bg-tertiary);
-            border-radius: 8px;
-            margin-top: 1rem;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .portfolio-stats {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1.5rem;
-            margin-top: 1.5rem;
-        }
-        
-        .stat-card {
-            background-color: var(--bg-tertiary);
-            border-radius: 8px;
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        
-        .stat-label {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-        
-        .stat-value {
-            font-size: 1.8rem;
-            font-weight: 600;
-        }
-        
-        .mmf {
-            color: var(--info);
-        }
-        
-        .mutual-fund {
-            color: var(--accent);
-        }
-        
+        /* Table Styles */
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 1rem;
         }
-        
         th, td {
-            padding: 0.8rem;
+            padding: 8px 12px;
             text-align: left;
-            border-bottom: 1px solid var(--border);
+            border: 1px solid #ddd;
         }
-        
         th {
-            color: var(--text-secondary);
-            font-weight: 500;
-            font-size: 0.9rem;
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
         }
         
-        tbody tr:hover {
-            background-color: rgba(110, 86, 207, 0.1);
-        }
-        
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-        
-        .badge-distribution {
-            background-color: rgba(40, 167, 69, 0.2);
-            color: var(--success);
-        }
-        
-        .badge-nav {
-            background-color: rgba(23, 162, 184, 0.2);
-            color: var(--info);
-        }
-        
-        canvas {
+        /* Chart Styles */
+        .chart-container {
             width: 100%;
-            height: 100%;
-        }
-        
-        #debug {
-            font-family: monospace;
-            white-space: pre-wrap;
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-            padding: 1rem;
-            border-radius: 4px;
-            max-height: 300px;
-            overflow: auto;
-            font-size: 0.85rem;
-        }
-        
-        .debug-card {
-            margin-top: 2rem;
-        }
-        
-        .debug-toggle {
-            cursor: pointer;
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-        
-        button {
-            background-color: var(--accent);
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: background-color 0.2s ease;
-        }
-        
-        button:hover {
-            background-color: var(--accent-hover);
+            height: 300px;
+            margin-bottom: 1.5rem;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Portfolio Comparison Dashboard</h1>
-            <div class="status loading" id="status">
-                <span>Loading data...</span>
-            </div>
-        </div>
+    <div id="container">
+        <h1>Mutual Fund Data Loader</h1>
         
+        <!-- Tab Navigation -->
         <div class="tabs">
-            <div class="tab active" data-tab="portfolio">Portfolio Comparison</div>
-            <div class="tab" data-tab="ancfx">ANCFX Details</div>
-            <div class="tab" data-tab="agthx">AGTHX Details</div>
+            <div class="tab active" data-tab="debug">Debug</div>
             <div class="tab" data-tab="afaxx">AFAXX Distributions</div>
+            <div class="tab" data-tab="agthx">AGTHX Data</div>
+            <div class="tab" data-tab="ancfx">ANCFX Data</div>
         </div>
         
-        <!-- Portfolio Comparison Tab -->
-        <div class="tab-content active" id="portfolio-tab">
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">Portfolio Settings</div>
-                </div>
-                <div class="inputs-group">
-                    <div class="input-container">
-                        <label for="start-date">Start Date</label>
-                        <input type="date" id="start-date" value="2024-01-01">
-                    </div>
-                    <div class="input-container">
-                        <label for="mmf-units">MMF Units (AFAXX)</label>
-                        <input type="number" id="mmf-units" value="77650.78" step="0.01">
-                    </div>
-                    <div class="input-container">
-                        <label for="ancfx-units">ANCFX Shares</label>
-                        <input type="number" id="ancfx-units" value="860.672" step="0.001">
-                    </div>
-                    <div class="input-container">
-                        <label for="agthx-units">AGTHX Shares</label>
-                        <input type="number" id="agthx-units" value="104.855" step="0.001">
-                    </div>
-                </div>
-                <button id="calculate-btn">
-                    Calculate Portfolio Values
-                </button>
-            </div>
-            
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">Portfolio Value Comparison</div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="portfolio-chart"></canvas>
-                </div>
-                <div class="portfolio-stats">
-                    <div class="stat-card">
-                        <div class="stat-label">MMF Portfolio Current Value</div>
-                        <div class="stat-value mmf" id="mmf-value">$0.00</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Mutual Fund Portfolio Current Value</div>
-                        <div class="stat-value mutual-fund" id="mutual-fund-value">$0.00</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- ANCFX Tab -->
-        <div class="tab-content" id="ancfx-tab">
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">ANCFX Data</div>
-                </div>
-                <div id="ancfx-summary" class="portfolio-stats">
-                    <div class="stat-card">
-                        <div class="stat-label">Current NAV</div>
-                        <div class="stat-value" id="ancfx-nav">$0.00</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">YTD Distributions</div>
-                        <div class="stat-value" id="ancfx-distributions">$0.00</div>
-                    </div>
-                </div>
-                <div style="margin-top: 1.5rem;">
-                    <h3 style="margin-bottom: 1rem; color: var(--text-secondary); font-weight: 500;">Historical Data</h3>
-                    <div style="max-height: 500px; overflow-y: auto;">
-                        <table id="ancfx-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>NAV</th>
-                                    <th>Distribution</th>
-                                    <th>Type</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- AGTHX Tab -->
-        <div class="tab-content" id="agthx-tab">
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">AGTHX Data</div>
-                </div>
-                <div id="agthx-summary" class="portfolio-stats">
-                    <div class="stat-card">
-                        <div class="stat-label">Current NAV</div>
-                        <div class="stat-value" id="agthx-nav">$0.00</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">YTD Distributions</div>
-                        <div class="stat-value" id="agthx-distributions">$0.00</div>
-                    </div>
-                </div>
-                <div style="margin-top: 1.5rem;">
-                    <h3 style="margin-bottom: 1rem; color: var(--text-secondary); font-weight: 500;">Historical Data</h3>
-                    <div style="max-height: 500px; overflow-y: auto;">
-                        <table id="agthx-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>NAV</th>
-                                    <th>Distribution</th>
-                                    <th>Type</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- AFAXX Tab -->
-        <div class="tab-content" id="afaxx-tab">
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">AFAXX Distribution Data</div>
-                </div>
-                <div id="afaxx-summary" class="portfolio-stats">
-                    <div class="stat-card">
-                        <div class="stat-label">Current NAV</div>
-                        <div class="stat-value">$1.00</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">YTD Average Rate</div>
-                        <div class="stat-value" id="afaxx-avg-rate">0.00%</div>
-                    </div>
-                </div>
-                <div style="margin-top: 1.5rem;">
-                    <h3 style="margin-bottom: 1rem; color: var(--text-secondary); font-weight: 500;">Distribution History</h3>
-                    <div style="max-height: 500px; overflow-y: auto;">
-                        <table id="afaxx-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Distribution Rate</th>
-                                    <th>Annualized</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="card debug-card">
-            <div class="card-header">
-                <div class="debug-toggle" onclick="toggleDebug()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                    <span>Debug Log (click to toggle)</span>
-                </div>
-            </div>
+        <!-- Tab Content -->
+        <div id="debug-tab" class="tab-content active">
             <div id="debug">Debug Output:</div>
+        </div>
+        
+        <div id="afaxx-tab" class="tab-content">
+            <h2>AFAXX Historical Distribution Data</h2>
+            <div class="chart-container" id="afaxx-chart"></div>
+            <table id="afaxx-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Distribution data will be populated here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div id="agthx-tab" class="tab-content">
+            <h2>AGTHX NAV and Distribution Data</h2>
+            <div class="chart-container" id="agthx-chart"></div>
+            <h3>NAV History</h3>
+            <table id="agthx-nav-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>NAV</th>
+                        <th>Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- NAV data will be populated here -->
+                </tbody>
+            </table>
+            
+            <h3>Distribution History</h3>
+            <table id="agthx-dist-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Distribution data will be populated here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div id="ancfx-tab" class="tab-content">
+            <h2>ANCFX NAV and Distribution Data</h2>
+            <div class="chart-container" id="ancfx-chart"></div>
+            <h3>NAV History</h3>
+            <table id="ancfx-nav-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>NAV</th>
+                        <th>Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- NAV data will be populated here -->
+                </tbody>
+            </table>
+            
+            <h3>Distribution History</h3>
+            <table id="ancfx-dist-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Distribution data will be populated here -->
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script>
-        const FUNDS = ['ANCFX', 'AGTHX'];
+        const FUNDS = ['ANCFX', 'AGTHX', 'AFAXX'];
         const PROXIES = [
             "https://corsproxy.io/?", 
             "https://api.allorigins.win/get?url=",
@@ -491,37 +176,181 @@
             "https://api.codetabs.com/v1/proxy/?quest="
         ];
         let debugLog = [];
-        let fundData = {};
-        let portfolioChart = null;
-        let debugVisible = true;
+        let allFundData = {};
 
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', function() {
-                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                    this.classList.add('active');
-                    document.querySelectorAll('.tab-content').forEach(content => {
-                        content.classList.remove('active');
-                    });
-                    const tabId = this.getAttribute('data-tab');
-                    document.getElementById(tabId + '-tab').classList.add('active');
-                });
+        // Tab functionality
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
             });
-            
-            document.getElementById('calculate-btn').addEventListener('click', renderCharts);
-            loadAllFundsData();
         });
-
-        function toggleDebug() {
-            const debugElement = document.getElementById('debug');
-            debugVisible = !debugVisible;
-            debugElement.style.display = debugVisible ? 'block' : 'none';
-        }
-
-        function updateDebugLog() {
-            document.getElementById('debug').textContent = debugLog.join('\n\n');
-        }
 
         async function fetchWithRetry(url, maxAttempts = 3, initialDelay = 1000) {
             for (let proxyIndex = 0; proxyIndex < PROXIES.length; proxyIndex++) {
-                const proxyUrl = PROXIES[proxy
+                const proxyUrl = PROXIES[proxyIndex] + encodeURIComponent(url);
+                
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    try {
+                        const start = Date.now();
+                        debugLog.push(`🔵 Proxy ${proxyIndex + 1}/${PROXIES.length} - Attempt ${attempt + 1}/${maxAttempts}\nURL: ${proxyUrl}`);
+                        
+                        const response = await fetch(proxyUrl, { cache: 'no-cache' });
+                        const latency = Date.now() - start;
+                        debugLog.push(`Status: ${response.status} • Latency: ${latency}ms`);
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error: ${response.status}`);
+                        }
+
+                        const text = await response.text();
+                        try {
+                            return JSON.parse(text).contents || text;
+                        } catch {
+                            return text;
+                        }
+                    } catch (error) {
+                        debugLog.push(`🔴 Proxy ${proxyIndex + 1} - Attempt ${attempt + 1} error: ${error.message}`);
+                        if (attempt < maxAttempts - 1) {
+                            const delay = initialDelay * Math.pow(2, attempt);
+                            debugLog.push(`⏱️ Waiting ${delay}ms before retry...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                    }
+                }
+            }
+            throw new Error('All proxies and retry attempts failed');
+        }
+
+        async function fetchYahooFinanceData(fund) {
+            const startDate = new Date('2024-01-01');
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() - 1);
+            const period1 = Math.floor(startDate.getTime() / 1000);
+            const period2 = Math.floor(endDate.getTime() / 1000);
+
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${fund}?period1=${period1}&period2=${period2}&interval=1d`;
+
+            try {
+                const data = await fetchWithRetry(url);
+                debugLog.push(`✅ Fetched ${fund} data from Yahoo Finance.`);
+                return data.chart?.result?.[0] || null;
+            } catch (error) {
+                debugLog.push(`⚠️ Error fetching ${fund} data: ${error.message}`);
+                return null;
+            }
+        }
+
+        function formatDate(timestamp) {
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function displayNavData(fund, tableId) {
+            const fundData = allFundData[fund];
+            if (!fundData || !fundData.timestamp || !fundData.indicators?.quote?.[0]?.close) {
+                document.getElementById(tableId).innerHTML = '<tr><td colspan="3">No data available</td></tr>';
+                return;
+            }
+            
+            const timestamps = fundData.timestamp;
+            const prices = fundData.indicators.quote[0].close;
+            
+            let tableHTML = '';
+            for (let i = 0; i < timestamps.length; i++) {
+                if (!prices[i]) continue;
+                
+                const change = i > 0 ? ((prices[i] - prices[i-1]) / prices[i-1] * 100).toFixed(2) + '%' : 'N/A';
+                tableHTML += `<tr>
+                    <td>${formatDate(timestamps[i])}</td>
+                    <td>$${prices[i].toFixed(2)}</td>
+                    <td>${change}</td>
+                </tr>`;
+            }
+            
+            document.getElementById(tableId).innerHTML = tableHTML || '<tr><td colspan="3">No data available</td></tr>';
+        }
+
+        function displayDistributionData(fund, tableId) {
+            const distributions = allFundData.distributions;
+            if (!distributions || !distributions[fund]) {
+                document.getElementById(tableId).innerHTML = '<tr><td colspan="3">No distribution data available</td></tr>';
+                return;
+            }
+            
+            const fundDistributions = distributions[fund];
+            let tableHTML = '';
+            
+            fundDistributions.forEach(dist => {
+                tableHTML += `<tr>
+                    <td>${dist.date}</td>
+                    <td>${dist.type}</td>
+                    <td>$${dist.amount.toFixed(4)}</td>
+                </tr>`;
+            });
+            
+            document.getElementById(tableId).innerHTML = tableHTML || '<tr><td colspan="3">No distribution data available</td></tr>';
+        }
+
+        function updateUI() {
+            document.getElementById('debug').textContent = debugLog.join('\n\n');
+            
+            // Display AFAXX distribution data
+            if (allFundData.distributions && allFundData.distributions.AFAXX) {
+                const afaxxTable = document.getElementById('afaxx-table').getElementsByTagName('tbody')[0];
+                let afaxxHTML = '';
+                
+                allFundData.distributions.AFAXX.forEach(dist => {
+                    afaxxHTML += `<tr>
+                        <td>${dist.date}</td>
+                        <td>${dist.type}</td>
+                        <td>$${dist.amount.toFixed(4)}</td>
+                    </tr>`;
+                });
+                
+                afaxxTable.innerHTML = afaxxHTML || '<tr><td colspan="3">No distribution data available</td></tr>';
+            }
+            
+            // Display AGTHX data
+            displayNavData('AGTHX', 'agthx-nav-table');
+            displayDistributionData('AGTHX', 'agthx-dist-table');
+            
+            // Display ANCFX data
+            displayNavData('ANCFX', 'ancfx-nav-table');
+            displayDistributionData('ANCFX', 'ancfx-dist-table');
+        }
+
+        async function loadAllFundsData() {
+            debugLog.push("🚀 Starting data retrieval...");
+
+            // Fetch fund data
+            for (let fund of FUNDS) {
+                let result = await fetchYahooFinanceData(fund);
+                if (result) {
+                    allFundData[fund] = result;
+                }
+            }
+
+            // Load distributions
+            try {
+                const distributions = await loadFundDistributionData('distributions.txt');
+                debugLog.push(`✅ Successfully loaded distributions from distributions.txt.`);
+                allFundData['distributions'] = distributions;
+            } catch (error) {
+                debugLog.push(`⚠️ Error loading distributions: ${error.message}`);
+            }
+
+            // Update UI with the retrieved data
+            updateUI();
+            
+            // Log the complete data object for debugging
+            console.log('All fund data:', allFundData);
+        }
+
+        window.onload = loadAllFundsData;
+    </script>
+</body>
+</html>
