@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Fund Data Loader</title>
+    <script src="fund-distribution-parser.js" defer></script> 
     <style>
         body { font-family: Arial, sans-serif; margin: 2rem; background-color: #f5f5f5; }
         #container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -15,10 +16,54 @@
         <div id="debug">Debug Output:</div>
     </div>
 
-    <script src="fund-distribution-parser.js"></script>
     <script>
         const FUNDS = ['ANCFX', 'AGTHX'];
+        const PROXIES = [
+            "https://corsproxy.io/?", 
+            "https://api.allorigins.win/get?url=",
+            "https://thingproxy.freeboard.io/fetch/",
+            "https://cors-anywhere.herokuapp.com/",
+            "https://crossorigin.me/",
+            "https://yacdn.org/serve/",
+            "https://api.codetabs.com/v1/proxy/?quest="
+        ];
         let debugLog = [];
+
+        async function fetchWithRetry(url, maxAttempts = 3, initialDelay = 1000) {
+            for (let proxyIndex = 0; proxyIndex < PROXIES.length; proxyIndex++) {
+                const proxyUrl = PROXIES[proxyIndex] + encodeURIComponent(url);
+                
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    try {
+                        const start = Date.now();
+                        debugLog.push(`🔵 Proxy ${proxyIndex + 1}/${PROXIES.length} - Attempt ${attempt + 1}/${maxAttempts}\nURL: ${proxyUrl}`);
+                        
+                        const response = await fetch(proxyUrl, { cache: 'no-cache' });
+                        const latency = Date.now() - start;
+                        debugLog.push(`Status: ${response.status} • Latency: ${latency}ms`);
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error: ${response.status}`);
+                        }
+
+                        const text = await response.text();
+                        try {
+                            return JSON.parse(text).contents || text;
+                        } catch {
+                            return text;
+                        }
+                    } catch (error) {
+                        debugLog.push(`🔴 Proxy ${proxyIndex + 1} - Attempt ${attempt + 1} error: ${error.message}`);
+                        if (attempt < maxAttempts - 1) {
+                            const delay = initialDelay * Math.pow(2, attempt);
+                            debugLog.push(`⏱️ Waiting ${delay}ms before retry...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                    }
+                }
+            }
+            throw new Error('All proxies and retry attempts failed');
+        }
 
         async function fetchYahooFinanceData(fund) {
             const startDate = new Date('2024-01-01');
@@ -30,11 +75,9 @@
             const url = `https://query1.finance.yahoo.com/v8/finance/chart/${fund}?period1=${period1}&period2=${period2}&interval=1d`;
 
             try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
-                const data = await response.json();
+                const data = await fetchWithRetry(url);
                 debugLog.push(`✅ Fetched ${fund} data from Yahoo Finance.`);
-                return data.chart.result[0];
+                return data.chart?.result?.[0] || null;
             } catch (error) {
                 debugLog.push(`⚠️ Error fetching ${fund} data: ${error.message}`);
                 return null;
@@ -44,7 +87,6 @@
         async function loadAllFundsData() {
             debugLog.push("🚀 Starting data retrieval...");
 
-            // Fetch Yahoo Finance data for each fund
             let fundData = {};
             for (let fund of FUNDS) {
                 let result = await fetchYahooFinanceData(fund);
@@ -53,7 +95,6 @@
                 }
             }
 
-            // Load distribution data
             try {
                 const distributions = await loadFundDistributionData('distributions.txt');
                 debugLog.push(`✅ Successfully loaded distributions from distributions.txt.`);
@@ -62,12 +103,11 @@
                 debugLog.push(`⚠️ Error loading distributions: ${error.message}`);
             }
 
-            // Display debug info
             document.getElementById('debug').textContent = debugLog.join('\n\n');
             console.log(fundData);
         }
 
-        loadAllFundsData();
+        window.onload = loadAllFundsData;
     </script>
 </body>
 </html>
