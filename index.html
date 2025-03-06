@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fund Distributions Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        
+        h1, h2 {
+            color: #2c3e50;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 5px 5px 0 0;
+        }
+        
+        .tab.active {
+            background-color: #fff;
+            border-bottom: 1px solid #fff;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        
+        .money-market-table {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+        }
+        
+        .error {
+            color: #e74c3c;
+            padding: 15px;
+            background-color: #fadbd8;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fund Distributions Viewer</h1>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="ancfx">ANCFX</div>
+            <div class="tab" data-tab="agthx">AGTHX</div>
+            <div class="tab" data-tab="afaxx">AFAXX</div>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="loading" class="loading">Loading fund data...</div>
+        
+        <div id="ancfx" class="tab-content active">
+            <h2>ANCFX Distributions</h2>
+            <table id="ancfx-table">
+                <thead>
+                    <tr>
+                        <th>Record Date</th>
+                        <th>Calculated Date</th>
+                        <th>Pay Date</th>
+                        <th>Income Dividend Regular</th>
+                        <th>Income Dividend Special</th>
+                        <th>Cap. Gains Long-Term</th>
+                        <th>Cap. Gains Short-Term</th>
+                        <th>Reinvest NAV</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        
+        <div id="agthx" class="tab-content">
+            <h2>AGTHX Distributions</h2>
+            <table id="agthx-table">
+                <thead>
+                    <tr>
+                        <th>Record Date</th>
+                        <th>Calculated Date</th>
+                        <th>Pay Date</th>
+                        <th>Income Dividend Regular</th>
+                        <th>Income Dividend Special</th>
+                        <th>Cap. Gains Long-Term</th>
+                        <th>Cap. Gains Short-Term</th>
+                        <th>Reinvest NAV</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        
+        <div id="afaxx" class="tab-content">
+            <h2>AFAXX Rates</h2>
+            <div class="money-market-table">
+                <table id="afaxx-table">
+                    <thead>
+                        <tr>
+                            <th>Rate</th>
+                            <th>As of Date</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Tab functionality
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Remove active class from all tabs and content
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    
+                    // Add active class to clicked tab and corresponding content
+                    this.classList.add('active');
+                    const tabId = this.getAttribute('data-tab');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+            
+            // Fetch and parse the data file
+            fetch('distributions.txt')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    parseData(data);
+                    document.getElementById('loading').style.display = 'none';
+                })
+                .catch(error => {
+                    document.getElementById('loading').style.display = 'none';
+                    const errorElement = document.getElementById('error');
+                    errorElement.textContent = `Error loading data: ${error.message}`;
+                    errorElement.style.display = 'block';
+                    console.error('Error:', error);
+                });
+        });
+        
+        function parseData(data) {
+            const lines = data.trim().split('\n');
+            
+            let currentFund = null;
+            let isHeader = false;
+            let headers = [];
+            
+            const ancfxData = [];
+            const agthxData = [];
+            const afaxxData = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // Skip empty lines
+                if (line === '') continue;
+                
+                // Detect fund
+                if (line === 'ANCFX') {
+                    currentFund = 'ANCFX';
+                    isHeader = true;
+                    continue;
+                } else if (line === 'AGTHX') {
+                    currentFund = 'AGTHX';
+                    isHeader = true;
+                    continue;
+                } else if (line === 'AFAXX') {
+                    currentFund = 'AFAXX';
+                    isHeader = true;
+                    continue;
+                }
+                
+                // Process headers
+                if (isHeader) {
+                    headers = line.split('\t');
+                    isHeader = false;
+                    continue;
+                }
+                
+                // Process data rows
+                const values = line.split('\t');
+                
+                if (currentFund === 'ANCFX') {
+                    if (values.length === headers.length) {
+                        ancfxData.push(values);
+                    }
+                } else if (currentFund === 'AGTHX') {
+                    if (values.length === headers.length) {
+                        agthxData.push(values);
+                    }
+                } else if (currentFund === 'AFAXX') {
+                    if (values.length === 2) {
+                        afaxxData.push(values);
+                    }
+                }
+            }
+            
+            // Populate tables
+            populateTable('ancfx-table', ancfxData);
+            populateTable('agthx-table', agthxData);
+            populateTable('afaxx-table', afaxxData);
+        }
+        
+        function populateTable(tableId, data) {
+            const tableBody = document.querySelector(`#${tableId} tbody`);
+            tableBody.innerHTML = '';
+            
+            data.forEach(rowData => {
+                const row = document.createElement('tr');
+                
+                rowData.forEach((cellData, index) => {
+                    const cell = document.createElement('td');
+                    
+                    // Format numbers if they start with $ (ANCFX and AGTHX)
+                    if (cellData.startsWith('$')) {
+                        cell.textContent = cellData;
+                        cell.style.textAlign = 'right';
+                    }
+                    // Format rate numbers (AFAXX)
+                    else if (!isNaN(parseFloat(cellData)) && tableId === 'afaxx-table' && index === 0) {
+                        // Convert to percentage with 6 decimal places
+                        const rateValue = parseFloat(cellData) * 100;
+                        cell.textContent = rateValue.toFixed(6) + '%';
+                        cell.style.textAlign = 'right';
+                    }
+                    // Format dates
+                    else if (cellData.match(/^\d{2}\/\d{2}\/\d{2,4}$/)) {
+                        cell.textContent = formatDate(cellData);
+                    } 
+                    else {
+                        cell.textContent = cellData;
+                    }
+                    
+                    row.appendChild(cell);
+                });
+                
+                tableBody.appendChild(row);
+            });
+        }
+        
+        function formatDate(dateString) {
+            // Check if date is in MM/DD/YY format and convert to MM/DD/YYYY if needed
+            const parts = dateString.split('/');
+            if (parts.length === 3 && parts[2].length === 2) {
+                const year = parts[2].startsWith('0') ? '20' + parts[2] : '20' + parts[2];
+                return `${parts[0]}/${parts[1]}/${year}`;
+            }
+            return dateString;
+        }
+    </script>
+</body>
+</html>
