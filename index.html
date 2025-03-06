@@ -7,36 +7,7 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 2rem; background-color: #f5f5f5; }
         #container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        #debug { font-family: monospace; white-space: pre-wrap; background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; max-height: 400px; overflow: auto; }
-        
-        /* Tab Styles */
-        .tabs {
-            display: flex;
-            margin-bottom: 1rem;
-            border-bottom: 1px solid #ddd;
-        }
-        .tab {
-            padding: 0.5rem 1rem;
-            cursor: pointer;
-            border: 1px solid transparent;
-            border-bottom: none;
-            border-radius: 4px 4px 0 0;
-            margin-right: 4px;
-            background-color: #f8f8f8;
-        }
-        .tab.active {
-            border-color: #ddd;
-            background-color: white;
-            font-weight: bold;
-            border-bottom: 1px solid white;
-            margin-bottom: -1px;
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
+        #debug { font-family: monospace; white-space: pre-wrap; background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; max-height: 600px; overflow: auto; margin-bottom: 20px; }
         
         /* Table Styles */
         table {
@@ -55,13 +26,6 @@
         }
         tr:nth-child(even) {
             background-color: #f9f9f9;
-        }
-        
-        /* Chart Styles */
-        .chart-container {
-            width: 100%;
-            height: 300px;
-            margin-bottom: 1.5rem;
         }
         
         /* Button Styles */
@@ -87,6 +51,12 @@
             display: flex;
             gap: 10px;
         }
+        
+        .section {
+            margin-bottom: 30px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -99,104 +69,18 @@
             <button id="refresh-ui-button" class="btn">Refresh UI Only</button>
         </div>
         
-        <!-- Tab Navigation -->
-        <div class="tabs">
-            <div class="tab active" data-tab="debug">Debug</div>
-            <div class="tab" data-tab="afaxx">AFAXX Distributions</div>
-            <div class="tab" data-tab="agthx">AGTHX Data</div>
-            <div class="tab" data-tab="ancfx">ANCFX Data</div>
-        </div>
+        <!-- Debug Output -->
+        <h2>Debug Output</h2>
+        <div id="debug">Debug Output:</div>
         
-        <!-- Tab Content -->
-        <div id="debug-tab" class="tab-content active">
-            <div id="debug">Debug Output:</div>
-        </div>
-        
-        <div id="afaxx-tab" class="tab-content">
-            <h2>AFAXX Historical Distribution Data</h2>
-            <div class="chart-container" id="afaxx-chart"></div>
-            <table id="afaxx-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Distribution data will be populated here -->
-                </tbody>
-            </table>
-        </div>
-        
-        <div id="agthx-tab" class="tab-content">
-            <h2>AGTHX NAV and Distribution Data</h2>
-            <div class="chart-container" id="agthx-chart"></div>
-            <h3>NAV History</h3>
-            <table id="agthx-nav-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>NAV</th>
-                        <th>Change</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- NAV data will be populated here -->
-                </tbody>
-            </table>
-            
-            <h3>Distribution History</h3>
-            <table id="agthx-dist-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Distribution data will be populated here -->
-                </tbody>
-            </table>
-        </div>
-        
-        <div id="ancfx-tab" class="tab-content">
-            <h2>ANCFX NAV and Distribution Data</h2>
-            <div class="chart-container" id="ancfx-chart"></div>
-            <h3>NAV History</h3>
-            <table id="ancfx-nav-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>NAV</th>
-                        <th>Change</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- NAV data will be populated here -->
-                </tbody>
-            </table>
-            
-            <h3>Distribution History</h3>
-            <table id="ancfx-dist-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Distribution data will be populated here -->
-                </tbody>
-            </table>
+        <!-- Data Output - All displayed at once -->
+        <div id="data-output">
+            <!-- Data will be displayed here -->
         </div>
     </div>
 
     <script>
-        const FUNDS = ['ANCFX', 'AGTHX', 'AFAXX'];
-        // Reordering proxies to put the working one first
+        const FUNDS = ['ANCFX', 'AGTHX']; // Removed AFAXX since we only need distribution data for it
         const PROXIES = [
             "https://api.allorigins.win/get?url=",
             "https://corsproxy.io/?", 
@@ -208,17 +92,6 @@
         ];
         let debugLog = [];
         let allFundData = {};
-
-        // Tab functionality
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                
-                tab.classList.add('active');
-                document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
-            });
-        });
         
         // Button event listeners
         document.getElementById('refresh-button').addEventListener('click', () => {
@@ -318,19 +191,14 @@
             return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         }
 
-        function displayNavData(fund, tableId) {
-            const tableBody = document.querySelector(`#${tableId} tbody`);
-            if (!tableBody) {
-                console.error(`Cannot find tbody for ${tableId}`);
-                debugLog.push(`⚠️ Cannot find tbody for ${tableId}`);
-                return;
-            }
-            
+        function generateNavTable(fund) {
             const fundData = allFundData[fund];
             if (!fundData || !fundData.timestamp || !fundData.indicators?.quote?.[0]?.close) {
-                tableBody.innerHTML = '<tr><td colspan="3">No NAV data available</td></tr>';
                 debugLog.push(`⚠️ No valid NAV data for ${fund}`);
-                return;
+                return `<div class="section">
+                    <h3>${fund} NAV History</h3>
+                    <p>No NAV data available</p>
+                </div>`;
             }
             
             const timestamps = fundData.timestamp;
@@ -338,7 +206,18 @@
             
             debugLog.push(`📊 Processing ${prices.length} NAV data points for ${fund}`);
             
-            let tableHTML = '';
+            let tableHTML = `<div class="section">
+                <h3>${fund} NAV History</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>NAV</th>
+                            <th>Change</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            
             let validRows = 0;
             
             for (let i = 0; i < timestamps.length; i++) {
@@ -356,57 +235,113 @@
                 validRows++;
             }
             
-            tableBody.innerHTML = tableHTML || '<tr><td colspan="3">No NAV data available</td></tr>';
-            debugLog.push(`✅ Updated NAV table for ${fund} with ${validRows} rows`);
+            tableHTML += `</tbody></table></div>`;
+            debugLog.push(`✅ Generated NAV table for ${fund} with ${validRows} rows`);
+            
+            return tableHTML;
         }
 
-        function displayDistributionData(fund, tableId) {
-            const tableBody = document.querySelector(`#${tableId} tbody`);
-            if (!tableBody) {
-                console.error(`Cannot find tbody for ${tableId}`);
-                debugLog.push(`⚠️ Cannot find tbody for ${tableId}`);
-                return;
-            }
-            
-            const distributions = allFundData.distributions;
-            if (!distributions) {
-                tableBody.innerHTML = '<tr><td colspan="3">No distribution data available</td></tr>';
+        function generateDistributionTable(fund) {
+            const distributionData = allFundData.distributions;
+            if (!distributionData) {
                 debugLog.push(`⚠️ No distribution data found at all`);
-                return;
+                return `<div class="section">
+                    <h3>${fund} Distribution History</h3>
+                    <p>No distribution data available</p>
+                </div>`;
             }
             
-            const fundDistributions = distributions[fund];
-            if (!fundDistributions || !Array.isArray(fundDistributions) || fundDistributions.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="3">No distribution data available for this fund</td></tr>';
+            const fundData = distributionData[fund];
+            if (!fundData) {
                 debugLog.push(`⚠️ No distribution data for ${fund}`);
-                return;
+                return `<div class="section">
+                    <h3>${fund} Distribution History</h3>
+                    <p>No distribution data available for this fund</p>
+                </div>`;
             }
             
-            debugLog.push(`📊 Processing ${fundDistributions.length} distribution records for ${fund}`);
-            
-            let tableHTML = '';
-            let validRows = 0;
-            
-            fundDistributions.forEach(dist => {
-                try {
-                    const amount = typeof dist.amount === 'string' ? 
-                        parseFloat(dist.amount) : 
-                        (typeof dist.amount === 'number' ? dist.amount : 0);
-                        
-                    tableHTML += `<tr>
-                        <td>${dist.date || 'Unknown'}</td>
-                        <td>${dist.type || 'Unknown'}</td>
-                        <td>$${amount.toFixed(4)}</td>
-                    </tr>`;
-                    
-                    validRows++;
-                } catch (e) {
-                    console.error(`Error processing distribution record:`, dist, e);
+            // Handle AFAXX differently (it has rates, not distributions)
+            if (fund === 'AFAXX') {
+                const rates = fundData.rates;
+                if (!rates || !Array.isArray(rates) || rates.length === 0) {
+                    debugLog.push(`⚠️ No rate data for AFAXX`);
+                    return `<div class="section">
+                        <h3>AFAXX Rate History</h3>
+                        <p>No rate data available</p>
+                    </div>`;
                 }
+                
+                debugLog.push(`📊 Processing ${rates.length} rate records for AFAXX`);
+                
+                let tableHTML = `<div class="section">
+                    <h3>AFAXX Rate History</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+                
+                rates.forEach(item => {
+                    tableHTML += `<tr>
+                        <td>${item.date || 'Unknown'}</td>
+                        <td>${item.rate || 'N/A'}</td>
+                    </tr>`;
+                });
+                
+                tableHTML += `</tbody></table></div>`;
+                debugLog.push(`✅ Generated rate table for AFAXX with ${rates.length} rows`);
+                
+                return tableHTML;
+            }
+            
+            // Handle ANCFX and AGTHX distributions
+            const distributions = fundData.distributions;
+            if (!distributions || !Array.isArray(distributions) || distributions.length === 0) {
+                debugLog.push(`⚠️ No distribution data for ${fund}`);
+                return `<div class="section">
+                    <h3>${fund} Distribution History</h3>
+                    <p>No distribution data available for this fund</p>
+                </div>`;
+            }
+            
+            debugLog.push(`📊 Processing ${distributions.length} distribution records for ${fund}`);
+            
+            // Get headers from fund data
+            const headers = fundData.headers || [];
+            
+            let tableHTML = `<div class="section">
+                <h3>${fund} Distribution History</h3>
+                <table>
+                    <thead>
+                        <tr>`;
+                        
+            // Create header row using the actual headers from the file
+            headers.forEach(header => {
+                tableHTML += `<th>${header}</th>`;
             });
             
-            tableBody.innerHTML = tableHTML || '<tr><td colspan="3">Failed to process distribution data</td></tr>';
-            debugLog.push(`✅ Updated distribution table for ${fund} with ${validRows} rows`);
+            tableHTML += `</tr>
+                    </thead>
+                    <tbody>`;
+            
+            // Create data rows based on the distribution objects
+            distributions.forEach(dist => {
+                tableHTML += `<tr>`;
+                
+                headers.forEach(header => {
+                    tableHTML += `<td>${dist[header] || 'N/A'}</td>`;
+                });
+                
+                tableHTML += `</tr>`;
+            });
+            
+            tableHTML += `</tbody></table></div>`;
+            debugLog.push(`✅ Generated distribution table for ${fund} with ${distributions.length} rows`);
+            
+            return tableHTML;
         }
 
         function updateUI() {
@@ -415,22 +350,20 @@
             
             console.log("Updating UI with data:", allFundData);
             
-            // Display AFAXX distribution data
-            if (allFundData.distributions && allFundData.distributions.AFAXX) {
-                displayDistributionData('AFAXX', 'afaxx-table');
-            } else {
-                debugLog.push(`⚠️ No AFAXX distribution data to display`);
-                document.querySelector('#afaxx-table tbody').innerHTML = 
-                    '<tr><td colspan="3">No distribution data available</td></tr>';
+            // Generate all data output
+            let dataHTML = '<h2>Fund Data</h2>';
+            
+            // Add distribution data for AFAXX (no NAV needed since it's always $1)
+            dataHTML += generateDistributionTable('AFAXX');
+            
+            // Add data for other funds
+            for (const fund of FUNDS) {
+                dataHTML += generateNavTable(fund);
+                dataHTML += generateDistributionTable(fund);
             }
             
-            // Display AGTHX data
-            displayNavData('AGTHX', 'agthx-nav-table');
-            displayDistributionData('AGTHX', 'agthx-dist-table');
-            
-            // Display ANCFX data
-            displayNavData('ANCFX', 'ancfx-nav-table');
-            displayDistributionData('ANCFX', 'ancfx-dist-table');
+            // Update the data output section
+            document.getElementById('data-output').innerHTML = dataHTML;
             
             // Update the debug display again to show the UI update logs
             document.getElementById('debug').textContent = debugLog.join('\n\n');
@@ -439,17 +372,17 @@
         async function loadAllFundsData() {
             debugLog.push("🚀 Starting data retrieval...");
 
-            // Fetch fund data
+            // Fetch NAV data for funds (excluding AFAXX)
             for (let fund of FUNDS) {
-                debugLog.push(`📊 Fetching data for ${fund}...`);
+                debugLog.push(`📊 Fetching NAV data for ${fund}...`);
                 let result = await fetchYahooFinanceData(fund);
                 if (result) {
                     allFundData[fund] = result;
-                    debugLog.push(`✅ Successfully loaded data for ${fund}`);
+                    debugLog.push(`✅ Successfully loaded NAV data for ${fund}`);
                 }
             }
 
-            // Load distributions
+            // Load distributions (including AFAXX)
             try {
                 debugLog.push(`📊 Loading distribution data...`);
                 const distributions = await loadFundDistributionData('distributions.txt');
@@ -464,13 +397,18 @@
                     const fundKeys = Object.keys(distributions);
                     debugLog.push(`📈 Found distribution data for: ${fundKeys.join(', ')}`);
                     
-                    // Check each fund for data
+                    // Check each fund for specific data structure
+                    if (distributions.AFAXX && distributions.AFAXX.rates) {
+                        debugLog.push(`AFAXX: ${distributions.AFAXX.rates.length} rate records found`);
+                    } else {
+                        debugLog.push(`AFAXX: No valid rate records found`);
+                    }
+                    
                     for (const fund of FUNDS) {
-                        const dist = distributions[fund];
-                        if (dist && Array.isArray(dist)) {
-                            debugLog.push(`${fund}: ${dist.length} distribution records found`);
+                        if (distributions[fund] && distributions[fund].distributions) {
+                            debugLog.push(`${fund}: ${distributions[fund].distributions.length} distribution records found`);
                         } else {
-                            debugLog.push(`${fund}: No valid distribution records found (${typeof dist})`);
+                            debugLog.push(`${fund}: No valid distribution records found`);
                         }
                     }
                 }
