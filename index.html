@@ -5,6 +5,7 @@
     <title>Portfolio Comparison Dashboard</title>
     <script src="fund-distribution-parser.js" defer></script>
     <style>
+        /* Keep all original CSS styles unchanged */
         :root {
             --bg-primary: #121212;
             --bg-secondary: #1e1e1e;
@@ -483,40 +484,31 @@
         const PROXIES = [
             "https://corsproxy.io/?", 
             "https://api.allorigins.win/get?url=",
-            "https://thingproxy.freeboard.io/fetch/"
+            "https://thingproxy.freeboard.io/fetch/",
+            "https://cors-anywhere.herokuapp.com/",
+            "https://crossorigin.me/",
+            "https://yacdn.org/serve/",
+            "https://api.codetabs.com/v1/proxy/?quest="
         ];
         let debugLog = [];
         let fundData = {};
         let portfolioChart = null;
         let debugVisible = true;
 
-        // DOM Ready
         document.addEventListener('DOMContentLoaded', function() {
-            // Set up tab switching
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.addEventListener('click', function() {
-                    // Remove active class from all tabs
                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                    // Add active class to clicked tab
                     this.classList.add('active');
-                    
-                    // Hide all tab content
                     document.querySelectorAll('.tab-content').forEach(content => {
                         content.classList.remove('active');
                     });
-                    
-                    // Show corresponding tab content
                     const tabId = this.getAttribute('data-tab');
                     document.getElementById(tabId + '-tab').classList.add('active');
                 });
             });
             
-            // Set up calculate button
-            document.getElementById('calculate-btn').addEventListener('click', function() {
-                renderCharts();
-            });
-            
-            // Start data loading
+            document.getElementById('calculate-btn').addEventListener('click', renderCharts);
             loadAllFundsData();
         });
 
@@ -532,264 +524,4 @@
 
         async function fetchWithRetry(url, maxAttempts = 3, initialDelay = 1000) {
             for (let proxyIndex = 0; proxyIndex < PROXIES.length; proxyIndex++) {
-                const proxyUrl = PROXIES[proxyIndex] + encodeURIComponent(url);
-                
-                for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                    try {
-                        const start = Date.now();
-                        debugLog.push(`🔵 Proxy ${proxyIndex + 1}/${PROXIES.length} - Attempt ${attempt + 1}/${maxAttempts}\nURL: ${proxyUrl}`);
-                        updateDebugLog();
-                        
-                        const response = await fetch(proxyUrl, { cache: 'no-cache' });
-                        const latency = Date.now() - start;
-                        debugLog.push(`Status: ${response.status} • Latency: ${latency}ms`);
-                        updateDebugLog();
-
-                        if (!response.ok) {
-                            throw new Error(`HTTP error: ${response.status}`);
-                        }
-
-                        const text = await response.text();
-                        try {
-                            return JSON.parse(text).contents || text;
-                        } catch {
-                            return text;
-                        }
-                    } catch (error) {
-                        debugLog.push(`🔴 Proxy ${proxyIndex + 1} - Attempt ${attempt + 1} error: ${error.message}`);
-                        updateDebugLog();
-                        
-                        if (attempt < maxAttempts - 1) {
-                            const delay = initialDelay * Math.pow(2, attempt);
-                            debugLog.push(`⏱️ Waiting ${delay}ms before retry...`);
-                            updateDebugLog();
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                        }
-                    }
-                }
-            }
-            throw new Error('All proxies and retry attempts failed');
-        }
-
-        async function fetchYahooFinanceData(fund) {
-            const startDate = new Date('2024-01-01');
-            const endDate = new Date();
-            endDate.setDate(endDate.getDate() - 1);
-            const period1 = Math.floor(startDate.getTime() / 1000);
-            const period2 = Math.floor(endDate.getTime() / 1000);
-
-            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${fund}?period1=${period1}&period2=${period2}&interval=1d`;
-
-            try {
-                debugLog.push(`🔍 Fetching ${fund} data from Yahoo Finance...`);
-                updateDebugLog();
-                
-                // For demo purposes, use mock data instead of actually fetching
-                // const data = await fetchWithRetry(url);
-                const data = getMockYahooFinanceData(fund);
-                
-                debugLog.push(`✅ Fetched ${fund} data from Yahoo Finance.`);
-                updateDebugLog();
-                return data;
-            } catch (error) {
-                debugLog.push(`⚠️ Error fetching ${fund} data: ${error.message}`);
-                updateDebugLog();
-                return null;
-            }
-        }
-
-        function getMockYahooFinanceData(fund) {
-            // Generate mock data for demonstration purposes
-            const result = {
-                timestamp: [],
-                indicators: {
-                    quote: [{
-                        close: []
-                    }]
-                }
-            };
-            
-            // Generate data for the last 90 days
-            const today = new Date();
-            const startDate = new Date(today);
-            startDate.setDate(startDate.getDate() - 90);
-            
-            let currentDate = new Date(startDate);
-            let basePrice = fund === 'ANCFX' ? 42.50 : 78.25;
-            
-            while (currentDate <= today) {
-                if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) { // Skip weekends
-                    result.timestamp.push(Math.floor(currentDate.getTime() / 1000));
-                    
-                    // Add some random variation
-                    const randomChange = (Math.random() - 0.5) * 0.6;
-                    basePrice += randomChange;
-                    result.indicators.quote[0].close.push(basePrice);
-                }
-                
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
-            
-            return result;
-        }
-
-        // Mock implementation of the distribution parser
-        async function loadFundDistributionData(filename) {
-            debugLog.push(`🔵 Loading distributions from ${filename}...`);
-            updateDebugLog();
-            
-            // This is a mock implementation since the actual parser is in a separate file
-            const mockDistributions = {
-                'AFAXX': [
-                    { date: '2024-01-31', rate: 0.0036, annualized: 4.32 },
-                    { date: '2024-02-29', rate: 0.0038, annualized: 4.56 },
-                    { date: '2024-03-31', rate: 0.0039, annualized: 4.68 },
-                    { date: '2024-04-30', rate: 0.0040, annualized: 4.80 },
-                    { date: '2024-05-31', rate: 0.0041, annualized: 4.92 },
-                    { date: '2024-06-30', rate: 0.0040, annualized: 4.80 },
-                    { date: '2024-07-31', rate: 0.0039, annualized: 4.68 },
-                    { date: '2024-08-31', rate: 0.0038, annualized: 4.56 },
-                    { date: '2024-09-30', rate: 0.0038, annualized: 4.56 },
-                    { date: '2024-10-31', rate: 0.0037, annualized: 4.44 },
-                    { date: '2024-11-30', rate: 0.0037, annualized: 4.44 },
-                    { date: '2024-12-31', rate: 0.0038, annualized: 4.56 },
-                ],
-                'ANCFX': [
-                    { date: '2024-03-28', amount: 0.121, type: 'Dividend' },
-                    { date: '2024-06-27', amount: 0.132, type: 'Dividend' },
-                    { date: '2024-09-26', amount: 0.127, type: 'Dividend' },
-                    { date: '2024-12-20', amount: 0.352, type: 'Capital Gain' }
-                ],
-                'AGTHX': [
-                    { date: '2024-03-28', amount: 0.057, type: 'Dividend' },
-                    { date: '2024-06-27', amount: 0.062, type: 'Dividend' },
-                    { date: '2024-09-26', amount: 0.059, type: 'Dividend' },
-                    { date: '2024-12-20', amount: 0.721, type: 'Capital Gain' }
-                ]
-            };
-            
-            debugLog.push(`✅ Successfully loaded distributions data.`);
-            updateDebugLog();
-            
-            return mockDistributions;
-        }
-
-        function processYahooData(yahooData) {
-            if (!yahooData || !yahooData.timestamp || !yahooData.indicators || !yahooData.indicators.quote) {
-                return [];
-            }
-            
-            const timestamps = yahooData.timestamp;
-            const closePrices = yahooData.indicators.quote[0].close;
-            const data = [];
-
-            for (let i = 0; i < timestamps.length; i++) {
-                if (closePrices[i] !== null) {
-                    const date = new Date(timestamps[i] * 1000);
-                    data.push({
-                        date: date.toISOString().split('T')[0],
-                        nav: closePrices[i]
-                    });
-                }
-            }
-
-            return data;
-        }
-
-        function calculateMMFPortfolio(startDate, initialUnits, distributions) {
-            const data = [];
-            let currentDate = new Date(startDate);
-            const today = new Date();
-            let currentUnits = initialUnits;
-            
-            while (currentDate <= today) {
-                // Format current date
-                const dateStr = currentDate.toISOString().split('T')[0];
-                
-                // Find if there's a distribution on this date
-                const distribution = distributions.find(d => d.date === dateStr);
-                
-                if (distribution) {
-                    // Add distribution to units
-                    const newUnits = currentUnits * distribution.rate;
-                    currentUnits += newUnits;
-                }
-                
-                // Add data point
-                data.push({
-                    date: dateStr,
-                    value: currentUnits // NAV is always $1
-                });
-                
-                // Move to next day
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
-            
-            return data;
-        }
-
-        function calculateMutualFundPortfolio(startDate, ancfxShares, agthxShares, ancfxData, agthxData, distributions) {
-            const data = [];
-            let currentDate = new Date(startDate);
-            const today = new Date();
-            let currentAncfxShares = ancfxShares;
-            let currentAgthxShares = agthxShares;
-            
-            while (currentDate <= today) {
-                // Format current date
-                const dateStr = currentDate.toISOString().split('T')[0];
-                
-                // Find NAV values for this date
-                const ancfxEntry = ancfxData.find(d => d.date === dateStr);
-                const agthxEntry = agthxData.find(d => d.date === dateStr);
-                
-                // Find distributions for this date
-                const ancfxDist = distributions.ANCFX.find(d => d.date === dateStr);
-                const agthxDist = distributions.AGTHX.find(d => d.date === dateStr);
-                
-                // Process distributions if any
-                if (ancfxDist) {
-                    // Calculate new shares from reinvested distribution
-                    const ancfxNav = ancfxEntry ? ancfxEntry.nav : getLatestNAV(ancfxData, dateStr);
-                    if (ancfxNav) {
-                        const newShares = (currentAncfxShares * ancfxDist.amount) / ancfxNav;
-                        currentAncfxShares += newShares;
-                    }
-                }
-                
-                if (agthxDist) {
-                    // Calculate new shares from reinvested distribution
-                    const agthxNav = agthxEntry ? agthxEntry.nav : getLatestNAV(agthxData, dateStr);
-                    if (agthxNav) {
-                        const newShares = (currentAgthxShares * agthxDist.amount) / agthxNav;
-                        currentAgthxShares += newShares;
-                    }
-                }
-                
-                // Calculate total value if we have NAV data
-                if (ancfxEntry && agthxEntry) {
-                    const totalValue = 
-                        (currentAncfxShares * ancfxEntry.nav) + 
-                        (currentAgthxShares * agthxEntry.nav);
-                    
-                    data.push({
-                        date: dateStr,
-                        value: totalValue
-                    });
-                }
-                
-                // Move to next day
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
-            
-            return data;
-        }
-
-        function getLatestNAV(data, beforeDate) {
-            // Sort data by date descending
-            const sortedData = [...data].sort((a, b) => new Date(b.date) - new Date(a.date));
-            
-            // Find the latest NAV before the given date
-            for (const entry of sortedData) {
-                if (new Date(entry.date) <= new Date(beforeDate)) {
-                    return entry.nav;
+                const proxyUrl = PROXIES[proxy
