@@ -48,3 +48,53 @@ function updateUIWithPortfolios() {
         ${portfolioHTML}
     `;
 }
+// Add this code to your HTML file after the existing script
+
+// Add these functions to your script.js file
+// Or include them directly in a script tag at the end of your HTML file
+
+// Add a button to the action bar
+document.querySelector('.action-bar').innerHTML += `
+    <button id="calculate-portfolios-button" class="btn">Calculate Portfolios</button>
+`;
+
+// Add event listener for the new button
+document.getElementById('calculate-portfolios-button').addEventListener('click', () => {
+    debugLog.push("📊 Calculating portfolio values...");
+    const portfolioHTML = generatePortfolioOutput(allFundData);
+    
+    // Create or update the portfolio output section
+    let portfolioSection = document.getElementById('portfolio-output');
+    if (!portfolioSection) {
+        portfolioSection = document.createElement('div');
+        portfolioSection.id = 'portfolio-output';
+        document.getElementById('data-output').insertAdjacentElement('afterend', portfolioSection);
+    }
+    
+    portfolioSection.innerHTML = `
+        <h2>Portfolio Calculations</h2>
+        ${portfolioHTML}
+    `;
+    
+    debugLog.push("✅ Portfolio calculations complete");
+    document.getElementById('debug').textContent = debugLog.join('\n\n');
+});
+
+// Add this function to your existing script
+// It's called automatically when the Calculate Portfolios button is clicked
+function updateUIWithPortfolios() {
+    const portfolioHTML = generatePortfolioOutput(allFundData);
+    
+    // Create or update the portfolio output section
+    let portfolioSection = document.getElementById('portfolio-output');
+    if (!portfolioSection) {
+        portfolioSection = document.createElement('div');
+        portfolioSection.id = 'portfolio-output';
+        document.getElementById('data-output').insertAdjacentElement('afterend', portfolioSection);
+    }
+    
+    portfolioSection.innerHTML = `
+        <h2>Portfolio Calculations</h2>
+        ${portfolioHTML}
+    `;
+}
