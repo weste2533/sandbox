@@ -1,156 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fund Data Processor Example</title>
+    <title>Fund Data Viewer</title>
+    <script src="fund_data_fetcher.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1, h2 {
-            color: #333;
-        }
-        .fund-section {
-            margin-bottom: 30px;
-            border: 1px solid #ddd;
-            padding: 15px;
-            border-radius: 5px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        .loading {
-            font-style: italic;
-            color: #666;
-        }
-        .distribution {
-            color: green;
-            font-weight: bold;
-        }
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+        .fund { margin-bottom: 30px; border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
     </style>
 </head>
 <body>
-    <h1>Fund Data Display Example</h1>
-    
-    <div class="fund-section" id="ANCFX-section">
-        <h2>ANCFX - American Funds Fundamental Investors</h2>
-        <div id="ANCFX-loading" class="loading">Loading data...</div>
-        <table id="ANCFX-table" style="display: none;">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>NAV</th>
-                    <th>Distribution</th>
-                </tr>
-            </thead>
-            <tbody id="ANCFX-data"></tbody>
-        </table>
-    </div>
-    
-    <div class="fund-section" id="AGTHX-section">
-        <h2>AGTHX - American Funds Growth Fund of America</h2>
-        <div id="AGTHX-loading" class="loading">Loading data...</div>
-        <table id="AGTHX-table" style="display: none;">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>NAV</th>
-                    <th>Distribution</th>
-                </tr>
-            </thead>
-            <tbody id="AGTHX-data"></tbody>
-        </table>
-    </div>
-    
-    <div class="fund-section" id="AFAXX-section">
-        <h2>AFAXX - American Funds Money Market Fund</h2>
-        <div id="AFAXX-loading" class="loading">Loading data...</div>
-        <table id="AFAXX-table" style="display: none;">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>NAV</th>
-                    <th>Distribution</th>
-                </tr>
-            </thead>
-            <tbody id="AFAXX-data"></tbody>
-        </table>
-    </div>
+    <h1>Fund Distribution Data</h1>
+    <div id="output"></div>
 
-    <!-- Load the fund data processor script -->
-    <script src="fund-data-processor.js"></script>
-    
     <script>
-        // Function to display fund data in the table
-        async function displayFundData(ticker) {
-            try {
-                // Get the fund data
-                const data = await window.fundDataProcessor.get_fund_data(ticker);
-                
-                // Get the table elements
-                const loadingElem = document.getElementById(`${ticker}-loading`);
-                const tableElem = document.getElementById(`${ticker}-table`);
-                const dataElem = document.getElementById(`${ticker}-data`);
-                
-                // Sort dates in descending order (newest first)
-                const sortedDates = Object.keys(data).sort((a, b) => {
-                    const dateA = new Date(a);
-                    const dateB = new Date(b);
-                    return dateB - dateA;
-                });
-                
-                // Generate table rows
-                let htmlContent = '';
-                sortedDates.forEach(date => {
-                    const { nav, total_distributions } = data[date];
-                    const distributionClass = total_distributions > 0 ? 'distribution' : '';
+        // Tickers to display
+        const funds = ['ANCFX', 'AGTHX', 'AFAXX'];
+        
+        async function loadAndDisplayData() {
+            const output = document.getElementById('output');
+            
+            for(const ticker of funds) {
+                try {
+                    output.innerHTML += `<h2>Loading ${ticker}...</h2>`;
+                    const data = await get_fund_data(ticker);
                     
-                    htmlContent += `
-                        <tr>
-                            <td>${date}</td>
-                            <td>$${nav.toFixed(2)}</td>
-                            <td class="${distributionClass}">$${total_distributions.toFixed(6)}</td>
-                        </tr>
+                    output.innerHTML += `
+                        <div class="fund">
+                            <h3>${ticker} Data (${data.length} records)</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
                     `;
-                });
-                
-                // Update the table
-                dataElem.innerHTML = htmlContent;
-                
-                // Hide loading, show table
-                loadingElem.style.display = 'none';
-                tableElem.style.display = 'table';
-                
-            } catch (error) {
-                console.error(`Error displaying data for ${ticker}:`, error);
-                document.getElementById(`${ticker}-loading`).textContent = 
-                    `Error loading data for ${ticker}. See console for details.`;
+                } catch (error) {
+                    output.innerHTML += `
+                        <div class="fund" style="color: red">
+                            Error loading ${ticker}: ${error.message}
+                        </div>
+                    `;
+                }
             }
         }
-        
-        // Load data for each fund when the page loads
-        window.addEventListener('DOMContentLoaded', () => {
-            displayFundData('ANCFX');
-            displayFundData('AGTHX');
-            displayFundData('AFAXX');
-        });
+
+        // Start loading when page loads
+        window.onload = loadAndDisplayData;
     </script>
 </body>
 </html>
