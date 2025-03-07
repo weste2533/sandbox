@@ -146,7 +146,7 @@ function calculateMMFPortfolio(allFundData, initialUnits, fundSymbol = 'AFAXX') 
         };
     }
 
-    const startDate = new Date('2024-12-30');
+    const startDate = new Date('2024-12-31');
     const recentRates = distributionData.rates.filter(rate => {
         const rateDate = new Date(rate.date);
         return rateDate >= startDate;
@@ -195,7 +195,7 @@ function calculateMMFPortfolio(allFundData, initialUnits, fundSymbol = 'AFAXX') 
  * @returns {Object} Portfolio value information
  */
 function calculateMutualFundPortfolio(allFundData, initialHoldings) {
-    const startDate = new Date('2024-12-30');
+    const startDate = new Date('2024-12-31');
     const results = {};
     let totalInitialValue = 0;
     let totalCurrentValue = 0;
