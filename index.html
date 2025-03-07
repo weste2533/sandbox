@@ -1,431 +1,50 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Fund Data Loader</title>
-    <script src="fund-distribution-parser.js" defer></script> 
-    <style>
-        body { font-family: Arial, sans-serif; margin: 2rem; background-color: #f5f5f5; }
-        #container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        #debug { font-family: monospace; white-space: pre-wrap; background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; max-height: 600px; overflow: auto; margin-bottom: 20px; }
-        
-        /* Table Styles */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-        }
-        th, td {
-            padding: 8px 12px;
-            text-align: left;
-            border: 1px solid #ddd;
-        }
-        th {
-            background-color: #f2f2f2;
-            font-weight: bold;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        
-        /* Button Styles */
-        .btn {
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 8px 16px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 14px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        .btn:hover {
-            background-color: #45a049;
-        }
-        
-        .action-bar {
-            margin: 15px 0;
-            display: flex;
-            gap: 10px;
-        }
-        
-        .section {
-            margin-bottom: 30px;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div id="container">
-        <h1>Mutual Fund Data Loader</h1>
-        
-        <!-- Action Buttons -->
-        <div class="action-bar">
-            <button id="refresh-button" class="btn">Refresh Data</button>
-            <button id="refresh-ui-button" class="btn">Refresh UI Only</button>
-        </div>
-        
-        <!-- Debug Output -->
-        <h2>Debug Output</h2>
-        <div id="debug">Debug Output:</div>
-        
-        <!-- Data Output - All displayed at once -->
-        <div id="data-output">
-            <!-- Data will be displayed here -->
-        </div>
-    </div>
+// Add this code to your HTML file after the existing script
 
-    <script>
-        const FUNDS = ['ANCFX', 'AGTHX']; // Removed AFAXX since we only need distribution data for it
-        const PROXIES = [
-            "https://api.allorigins.win/get?url=",
-            "https://corsproxy.io/?", 
-            "https://thingproxy.freeboard.io/fetch/",
-            "https://cors-anywhere.herokuapp.com/",
-            "https://crossorigin.me/",
-            "https://yacdn.org/serve/",
-            "https://api.codetabs.com/v1/proxy/?quest="
-        ];
-        let debugLog = [];
-        let allFundData = {};
-        
-        // Button event listeners
-        document.getElementById('refresh-button').addEventListener('click', () => {
-            debugLog = [];
-            allFundData = {};
-            document.getElementById('debug').textContent = "🔄 Refreshing all data...";
-            loadAllFundsData();
-        });
-        
-        document.getElementById('refresh-ui-button').addEventListener('click', () => {
-            debugLog.push("🔄 Manually refreshing UI...");
-            updateUI();
-        });
+// Add these functions to your script.js file
+// Or include them directly in a script tag at the end of your HTML file
 
-        async function fetchWithRetry(url, maxAttempts = 2) {
-            for (let proxyIndex = 0; proxyIndex < PROXIES.length; proxyIndex++) {
-                const proxyUrl = PROXIES[proxyIndex] + encodeURIComponent(url);
-                
-                for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                    try {
-                        const start = Date.now();
-                        debugLog.push(`🔵 Proxy ${proxyIndex + 1}/${PROXIES.length} - Attempt ${attempt + 1}/${maxAttempts}\nURL: ${proxyUrl}`);
-                        
-                        const response = await fetch(proxyUrl, { cache: 'no-cache' });
-                        const latency = Date.now() - start;
-                        debugLog.push(`Status: ${response.status} • Latency: ${latency}ms`);
+// Add a button to the action bar
+document.querySelector('.action-bar').innerHTML += `
+    <button id="calculate-portfolios-button" class="btn">Calculate Portfolios</button>
+`;
 
-                        if (!response.ok) {
-                            throw new Error(`HTTP error: ${response.status}`);
-                        }
+// Add event listener for the new button
+document.getElementById('calculate-portfolios-button').addEventListener('click', () => {
+    debugLog.push("📊 Calculating portfolio values...");
+    const portfolioHTML = generatePortfolioOutput(allFundData);
+    
+    // Create or update the portfolio output section
+    let portfolioSection = document.getElementById('portfolio-output');
+    if (!portfolioSection) {
+        portfolioSection = document.createElement('div');
+        portfolioSection.id = 'portfolio-output';
+        document.getElementById('data-output').insertAdjacentElement('afterend', portfolioSection);
+    }
+    
+    portfolioSection.innerHTML = `
+        <h2>Portfolio Calculations</h2>
+        ${portfolioHTML}
+    `;
+    
+    debugLog.push("✅ Portfolio calculations complete");
+    document.getElementById('debug').textContent = debugLog.join('\n\n');
+});
 
-                        const text = await response.text();
-                        try {
-                            // Handle allorigins.win specific response format
-                            if (proxyUrl.includes('allorigins.win')) {
-                                const jsonResponse = JSON.parse(text);
-                                if (jsonResponse.contents) {
-                                    return JSON.parse(jsonResponse.contents);
-                                }
-                            }
-                            return JSON.parse(text);
-                        } catch (e) {
-                            debugLog.push(`⚠️ JSON parse error: ${e.message}`);
-                            return text;
-                        }
-                    } catch (error) {
-                        debugLog.push(`🔴 Proxy ${proxyIndex + 1} - Attempt ${attempt + 1} error: ${error.message}`);
-                        
-                        // Only wait if we're going to retry
-                        if (attempt < maxAttempts - 1) {
-                            const delay = 1000 * (attempt + 1);
-                            debugLog.push(`⏱️ Waiting ${delay}ms before retry...`);
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                        }
-                    }
-                }
-                
-                // Try next proxy without waiting if all attempts with current proxy failed
-            }
-            throw new Error('All proxies and retry attempts failed');
-        }
-
-        async function fetchYahooFinanceData(fund) {
-            const startDate = new Date('2024-01-01');
-            const endDate = new Date();
-            endDate.setDate(endDate.getDate() - 1);
-            const period1 = Math.floor(startDate.getTime() / 1000);
-            const period2 = Math.floor(endDate.getTime() / 1000);
-
-            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${fund}?period1=${period1}&period2=${period2}&interval=1d`;
-
-            try {
-                const data = await fetchWithRetry(url);
-                debugLog.push(`✅ Fetched ${fund} data from Yahoo Finance.`);
-                
-                // Log some details about the data structure
-                if (data && data.chart && data.chart.result && data.chart.result.length > 0) {
-                    const result = data.chart.result[0];
-                    const timestamps = result.timestamp || [];
-                    const quotes = result.indicators?.quote?.[0]?.close || [];
-                    
-                    debugLog.push(`📊 ${fund} data: ${timestamps.length} timestamps, ${quotes.length} price points`);
-                    return result;
-                } else {
-                    debugLog.push(`⚠️ ${fund} data is incomplete or not in expected format`);
-                    console.log("Yahoo Finance data structure:", data);
-                    return null;
-                }
-            } catch (error) {
-                debugLog.push(`⚠️ Error fetching ${fund} data: ${error.message}`);
-                return null;
-            }
-        }
-
-        function formatDate(timestamp) {
-            const date = new Date(timestamp * 1000);
-            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-        }
-
-        function generateNavTable(fund) {
-            const fundData = allFundData[fund];
-            if (!fundData || !fundData.timestamp || !fundData.indicators?.quote?.[0]?.close) {
-                debugLog.push(`⚠️ No valid NAV data for ${fund}`);
-                return `<div class="section">
-                    <h3>${fund} NAV History</h3>
-                    <p>No NAV data available</p>
-                </div>`;
-            }
-            
-            const timestamps = fundData.timestamp;
-            const prices = fundData.indicators.quote[0].close;
-            
-            debugLog.push(`📊 Processing ${prices.length} NAV data points for ${fund}`);
-            
-            let tableHTML = `<div class="section">
-                <h3>${fund} NAV History</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>NAV</th>
-                            <th>Change</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
-            
-            let validRows = 0;
-            
-            for (let i = 0; i < timestamps.length; i++) {
-                if (prices[i] === null || prices[i] === undefined) continue;
-                
-                const change = i > 0 && prices[i-1] !== null ? 
-                    ((prices[i] - prices[i-1]) / prices[i-1] * 100).toFixed(2) + '%' : 'N/A';
-                
-                tableHTML += `<tr>
-                    <td>${formatDate(timestamps[i])}</td>
-                    <td>$${prices[i].toFixed(2)}</td>
-                    <td>${change}</td>
-                </tr>`;
-                
-                validRows++;
-            }
-            
-            tableHTML += `</tbody></table></div>`;
-            debugLog.push(`✅ Generated NAV table for ${fund} with ${validRows} rows`);
-            
-            return tableHTML;
-        }
-
-        function generateDistributionTable(fund) {
-            const distributionData = allFundData.distributions;
-            if (!distributionData) {
-                debugLog.push(`⚠️ No distribution data found at all`);
-                return `<div class="section">
-                    <h3>${fund} Distribution History</h3>
-                    <p>No distribution data available</p>
-                </div>`;
-            }
-            
-            const fundData = distributionData[fund];
-            if (!fundData) {
-                debugLog.push(`⚠️ No distribution data for ${fund}`);
-                return `<div class="section">
-                    <h3>${fund} Distribution History</h3>
-                    <p>No distribution data available for this fund</p>
-                </div>`;
-            }
-            
-            // Handle AFAXX differently (it has rates, not distributions)
-            if (fund === 'AFAXX') {
-                const rates = fundData.rates;
-                if (!rates || !Array.isArray(rates) || rates.length === 0) {
-                    debugLog.push(`⚠️ No rate data for AFAXX`);
-                    return `<div class="section">
-                        <h3>AFAXX Rate History</h3>
-                        <p>No rate data available</p>
-                    </div>`;
-                }
-                
-                debugLog.push(`📊 Processing ${rates.length} rate records for AFAXX`);
-                
-                let tableHTML = `<div class="section">
-                    <h3>AFAXX Rate History</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Rate</th>
-                            </tr>
-                        </thead>
-                        <tbody>`;
-                
-                rates.forEach(item => {
-                    tableHTML += `<tr>
-                        <td>${item.date || 'Unknown'}</td>
-                        <td>${item.rate || 'N/A'}</td>
-                    </tr>`;
-                });
-                
-                tableHTML += `</tbody></table></div>`;
-                debugLog.push(`✅ Generated rate table for AFAXX with ${rates.length} rows`);
-                
-                return tableHTML;
-            }
-            
-            // Handle ANCFX and AGTHX distributions
-            const distributions = fundData.distributions;
-            if (!distributions || !Array.isArray(distributions) || distributions.length === 0) {
-                debugLog.push(`⚠️ No distribution data for ${fund}`);
-                return `<div class="section">
-                    <h3>${fund} Distribution History</h3>
-                    <p>No distribution data available for this fund</p>
-                </div>`;
-            }
-            
-            debugLog.push(`📊 Processing ${distributions.length} distribution records for ${fund}`);
-            
-            // Get headers from fund data
-            const headers = fundData.headers || [];
-            
-            let tableHTML = `<div class="section">
-                <h3>${fund} Distribution History</h3>
-                <table>
-                    <thead>
-                        <tr>`;
-                        
-            // Create header row using the actual headers from the file
-            headers.forEach(header => {
-                tableHTML += `<th>${header}</th>`;
-            });
-            
-            tableHTML += `</tr>
-                    </thead>
-                    <tbody>`;
-            
-            // Create data rows based on the distribution objects
-            distributions.forEach(dist => {
-                tableHTML += `<tr>`;
-                
-                headers.forEach(header => {
-                    tableHTML += `<td>${dist[header] || 'N/A'}</td>`;
-                });
-                
-                tableHTML += `</tr>`;
-            });
-            
-            tableHTML += `</tbody></table></div>`;
-            debugLog.push(`✅ Generated distribution table for ${fund} with ${distributions.length} rows`);
-            
-            return tableHTML;
-        }
-
-        function updateUI() {
-            // Update debug log display
-            document.getElementById('debug').textContent = debugLog.join('\n\n');
-            
-            console.log("Updating UI with data:", allFundData);
-            
-            // Generate all data output
-            let dataHTML = '<h2>Fund Data</h2>';
-            
-            // Add distribution data for AFAXX (no NAV needed since it's always $1)
-            dataHTML += generateDistributionTable('AFAXX');
-            
-            // Add data for other funds
-            for (const fund of FUNDS) {
-                dataHTML += generateNavTable(fund);
-                dataHTML += generateDistributionTable(fund);
-            }
-            
-            // Update the data output section
-            document.getElementById('data-output').innerHTML = dataHTML;
-            
-            // Update the debug display again to show the UI update logs
-            document.getElementById('debug').textContent = debugLog.join('\n\n');
-        }
-
-        async function loadAllFundsData() {
-            debugLog.push("🚀 Starting data retrieval...");
-
-            // Fetch NAV data for funds (excluding AFAXX)
-            for (let fund of FUNDS) {
-                debugLog.push(`📊 Fetching NAV data for ${fund}...`);
-                let result = await fetchYahooFinanceData(fund);
-                if (result) {
-                    allFundData[fund] = result;
-                    debugLog.push(`✅ Successfully loaded NAV data for ${fund}`);
-                }
-            }
-
-            // Load distributions (including AFAXX)
-            try {
-                debugLog.push(`📊 Loading distribution data...`);
-                const distributions = await loadFundDistributionData('distributions.txt');
-                
-                if (!distributions) {
-                    debugLog.push(`⚠️ Distribution data is null or undefined`);
-                } else {
-                    debugLog.push(`✅ Successfully loaded distributions from distributions.txt.`);
-                    allFundData['distributions'] = distributions;
-                    
-                    // Log what funds we have distribution data for
-                    const fundKeys = Object.keys(distributions);
-                    debugLog.push(`📈 Found distribution data for: ${fundKeys.join(', ')}`);
-                    
-                    // Check each fund for specific data structure
-                    if (distributions.AFAXX && distributions.AFAXX.rates) {
-                        debugLog.push(`AFAXX: ${distributions.AFAXX.rates.length} rate records found`);
-                    } else {
-                        debugLog.push(`AFAXX: No valid rate records found`);
-                    }
-                    
-                    for (const fund of FUNDS) {
-                        if (distributions[fund] && distributions[fund].distributions) {
-                            debugLog.push(`${fund}: ${distributions[fund].distributions.length} distribution records found`);
-                        } else {
-                            debugLog.push(`${fund}: No valid distribution records found`);
-                        }
-                    }
-                }
-            } catch (error) {
-                debugLog.push(`⚠️ Error loading distributions: ${error.message}`);
-                console.error("Distribution loading error:", error);
-            }
-
-            // Update UI with the retrieved data
-            debugLog.push(`🔄 Updating UI with retrieved data...`);
-            updateUI();
-            
-            // Log the complete data object for debugging
-            console.log('All fund data:', allFundData);
-        }
-
-        window.onload = loadAllFundsData;
-    </script>
-</body>
-</html>
+// Add this function to your existing script
+// It's called automatically when the Calculate Portfolios button is clicked
+function updateUIWithPortfolios() {
+    const portfolioHTML = generatePortfolioOutput(allFundData);
+    
+    // Create or update the portfolio output section
+    let portfolioSection = document.getElementById('portfolio-output');
+    if (!portfolioSection) {
+        portfolioSection = document.createElement('div');
+        portfolioSection.id = 'portfolio-output';
+        document.getElementById('data-output').insertAdjacentElement('afterend', portfolioSection);
+    }
+    
+    portfolioSection.innerHTML = `
+        <h2>Portfolio Calculations</h2>
+        ${portfolioHTML}
+    `;
+}
