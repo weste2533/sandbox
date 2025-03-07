@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Fund Data Loader</title>
-    <script src="fund-distribution-parser.js" defer></script> 
+    <script src="fund-distribution-parser.js" defer></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 2rem; background-color: #f5f5f5; }
         #container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -47,7 +47,7 @@
     </div>
 
     <script>
-        const FUNDS = ['ANCFX', 'AGTHX']; // Removed AFAXX since we only need distribution data for it
+        const FUNDS = ['ANCFX', 'AGTHX', 'AFAXX'];
         const PROXIES = [
             "https://api.allorigins.win/get?url=",
             "https://corsproxy.io/?", 
@@ -59,6 +59,17 @@
         ];
         let debugLog = [];
         let allFundData = {};
+
+        function initializePortfolioData() {
+            for (const fund of FUNDS) {
+                allFundData[fund] = {
+                    startDate: null,
+                    initialShares: null,
+                    initialNAV: null,
+                    dailyChanges: {}
+                };
+            }
+        }
 
         async function fetchWithRetry(url, maxAttempts = 2) {
             for (let proxyIndex = 0; proxyIndex < PROXIES.length; proxyIndex++) {
@@ -79,7 +90,6 @@
 
                         const text = await response.text();
                         try {
-                            // Handle allorigins.win specific response format
                             if (proxyUrl.includes('allorigins.win')) {
                                 const jsonResponse = JSON.parse(text);
                                 if (jsonResponse.contents) {
@@ -94,7 +104,6 @@
                     } catch (error) {
                         debugLog.push(`🔴 Proxy ${proxyIndex + 1} - Attempt ${attempt + 1} error: ${error.message}`);
                         
-                        // Only wait if we're going to retry
                         if (attempt < maxAttempts - 1) {
                             const delay = 1000 * (attempt + 1);
                             debugLog.push(`⏱️ Waiting ${delay}ms before retry...`);
@@ -102,8 +111,6 @@
                         }
                     }
                 }
-                
-                // Try next proxy without waiting if all attempts with current proxy failed
             }
             throw new Error('All proxies and retry attempts failed');
         }
@@ -121,13 +128,36 @@
                 const data = await fetchWithRetry(url);
                 debugLog.push(`✅ Fetched ${fund} data from Yahoo Finance.`);
                 
-                // Log some details about the data structure
                 if (data && data.chart && data.chart.result && data.chart.result.length > 0) {
                     const result = data.chart.result[0];
                     const timestamps = result.timestamp || [];
                     const quotes = result.indicators?.quote?.[0]?.close || [];
                     
                     debugLog.push(`📊 ${fund} data: ${timestamps.length} timestamps, ${quotes.length} price points`);
+                    
+                    if (quotes.length > 0) {
+                        allFundData[fund].initialNAV = quotes[0];
+                        allFundData[fund].startDate = new Date(timestamps[0] * 1000).toISOString().split('T')[0];
+                    }
+                    
+                    for (let i = 0; i < timestamps.length; i++) {
+                        const date = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+                        const nav = quotes[i];
+                        
+                        if (!allFundData[fund].dailyChanges[date]) {
+                            allFundData[fund].dailyChanges[date] = {
+                                NAV: nav,
+                                totalDistributions: 0,
+                                previousShares: null,
+                                addedShares: 0,
+                                newShares: null,
+                                newFundValue: null
+                            };
+                        } else {
+                            allFundData[fund].dailyChanges[date].NAV = nav;
+                        }
+                    }
+                    
                     return result;
                 } else {
                     debugLog.push(`⚠️ ${fund} data is incomplete or not in expected format`);
@@ -139,229 +169,102 @@
                 return null;
             }
         }
-        
-        function updateDebugDisplay() {
-            document.getElementById('debug').textContent = debugLog.join('\n\n');
-        }
-        
-        // Function to create a human-readable representation of the data structure
-        function displayDataStructure(data) {
-            const structureDiv = document.getElementById('data-structure');
+
+        async function processDistributionData(distributionsData) {
+            debugLog.push(`📊 Processing distribution data...`);
             
-            // Function to create a simplified data representation
-            function createDataSummary(data, prefix = '', maxDepth = 3, currentDepth = 0) {
-                if (currentDepth >= maxDepth) return prefix + '... (truncated for readability)';
-                
-                if (data === null) return prefix + 'null';
-                if (data === undefined) return prefix + 'undefined';
-                
-                const type = typeof data;
-                
-                if (type === 'number' || type === 'boolean' || type === 'string') {
-                    // For string values, truncate if too long
-                    if (type === 'string' && data.length > 100) {
-                        return prefix + `"${data.substring(0, 100)}..." (${data.length} chars)`;
-                    }
-                    return prefix + JSON.stringify(data);
-                }
-                
-                if (Array.isArray(data)) {
-                    if (data.length === 0) return prefix + '[]';
-                    
-                    // For arrays, show length and sample items
-                    let result = prefix + `Array(${data.length}) [\n`;
-                    
-                    // Show first 3 items, middle item (if applicable), and last item
-                    const samplesToShow = Math.min(3, data.length);
-                    for (let i = 0; i < samplesToShow; i++) {
-                        result += createDataSummary(data[i], prefix + '  ', maxDepth, currentDepth + 1) + ',\n';
-                    }
-                    
-                    // Add middle item if array is large
-                    if (data.length > 6) {
-                        result += prefix + '  ... more items ...\n';
-                    }
-                    
-                    // Add last item if not already shown
-                    if (data.length > samplesToShow) {
-                        result += createDataSummary(data[data.length - 1], prefix + '  ', maxDepth, currentDepth + 1) + '\n';
-                    }
-                    
-                    result += prefix + ']';
-                    return result;
-                }
-                
-                if (type === 'object') {
-                    const keys = Object.keys(data);
-                    if (keys.length === 0) return prefix + '{}';
-                    
-                    let result = prefix + '{\n';
-                    
-                    // For large objects, limit the number of keys shown
-                    const keysToShow = keys.length > 10 ? keys.slice(0, 10) : keys;
-                    
-                    for (const key of keysToShow) {
-                        result += prefix + `  "${key}": ` + 
-                                  createDataSummary(data[key], '', maxDepth, currentDepth + 1).trimStart() + ',\n';
-                    }
-                    
-                    if (keys.length > 10) {
-                        result += prefix + `  ... ${keys.length - 10} more properties ...\n`;
-                    }
-                    
-                    result += prefix + '}';
-                    return result;
-                }
-                
-                return prefix + String(data);
-            }
-            
-            let summary = '';
-            
-            // Add NAV data summaries
             for (const fund of FUNDS) {
-                if (allFundData[fund]) {
-                    summary += `=== ${fund} NAV Data ===\n`;
+                if (distributionsData[fund] && distributionsData[fund].distributions) {
+                    debugLog.push(`${fund}: ${distributionsData[fund].distributions.length} distribution records found`);
                     
-                    // Show a sample of actual values
-                    const timestamps = allFundData[fund].timestamp || [];
-                    const prices = allFundData[fund].indicators?.quote?.[0]?.close || [];
-                    
-                    summary += `Total data points: ${timestamps.length}\n`;
-                    
-                    if (timestamps.length > 0) {
-                        summary += '\nSample date/price pairs:\n';
+                    for (const dist of distributionsData[fund].distributions) {
+                        const date = dist['Distribution Date'];
+                        const reinvestNAV = dist['Reinvest NAV'];
+                        const totalDistributions = dist['Total Distributions'];
                         
-                        // Show first 3, middle, and last data points
-                        const sampleIndices = [0, 1, 2];
-                        if (timestamps.length > 6) {
-                            sampleIndices.push(Math.floor(timestamps.length / 2));
-                        }
-                        if (timestamps.length > 3) {
-                            sampleIndices.push(timestamps.length - 1);
-                        }
-                        
-                        for (const idx of sampleIndices) {
-                            if (idx < timestamps.length) {
-                                const date = new Date(timestamps[idx] * 1000);
-                                const formattedDate = date.toLocaleDateString();
-                                summary += `  ${formattedDate}: $${prices[idx]?.toFixed(2) || 'N/A'}\n`;
+                        if (!allFundData[fund].dailyChanges[date]) {
+                            allFundData[fund].dailyChanges[date] = {
+                                NAV: reinvestNAV,
+                                totalDistributions: totalDistributions,
+                                previousShares: null,
+                                addedShares: 0,
+                                newShares: null,
+                                newFundValue: null
+                            };
+                        } else {
+                            allFundData[fund].dailyChanges[date].totalDistributions = totalDistributions;
+                            if (!allFundData[fund].dailyChanges[date].NAV) {
+                                allFundData[fund].dailyChanges[date].NAV = reinvestNAV;
                             }
                         }
                     }
-                    
-                    summary += '\n';
+                } else {
+                    debugLog.push(`${fund}: No valid distribution records found`);
                 }
             }
-            
-            // Add distribution data summaries
-            if (allFundData.distributions) {
-                summary += '=== Distribution Data ===\n';
-                
-                // AFAXX Rate data
-                const afaxxData = allFundData.distributions.AFAXX;
-                if (afaxxData && afaxxData.rates) {
-                    summary += `\nAFAXX Rate Data: ${afaxxData.rates.length} records\n`;
-                    
-                    if (afaxxData.rates.length > 0) {
-                        summary += 'Sample rates:\n';
-                        const samplesToShow = Math.min(3, afaxxData.rates.length);
-                        
-                        for (let i = 0; i < samplesToShow; i++) {
-                            const rate = afaxxData.rates[i];
-                            summary += `  ${rate.date || 'Unknown'}: ${rate.rate || 'N/A'}\n`;
-                        }
-                        
-                        if (afaxxData.rates.length > samplesToShow) {
-                            summary += `  ... and ${afaxxData.rates.length - samplesToShow} more records\n`;
-                        }
-                    }
-                }
-                
-                // Distribution data for other funds
-                for (const fund of FUNDS) {
-                    const fundDist = allFundData.distributions[fund];
-                    if (fundDist && fundDist.distributions) {
-                        summary += `\n${fund} Distribution Data: ${fundDist.distributions.length} records\n`;
-                        
-                        // Show headers
-                        if (fundDist.headers && fundDist.headers.length > 0) {
-                            summary += `Headers: ${fundDist.headers.join(', ')}\n`;
-                        }
-                        
-                        // Show sample distributions
-                        if (fundDist.distributions.length > 0) {
-                            summary += 'Sample distributions:\n';
-                            const samplesToShow = Math.min(3, fundDist.distributions.length);
-                            
-                            for (let i = 0; i < samplesToShow; i++) {
-                                const dist = fundDist.distributions[i];
-                                summary += `  Record ${i+1}:\n`;
-                                
-                                for (const key in dist) {
-                                    summary += `    ${key}: ${dist[key]}\n`;
-                                }
-                            }
-                            
-                            if (fundDist.distributions.length > samplesToShow) {
-                                summary += `  ... and ${fundDist.distributions.length - samplesToShow} more records\n`;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Add raw data structure
-            summary += '\n=== Raw Data Structure ===\n';
-            summary += createDataSummary(allFundData);
-            
-            structureDiv.textContent = summary;
         }
 
-        // Helper function to prepare data for portfolio calculations
-        function prepareDataForPortfolioCalculations(allFundData) {
-            // Create a new object that has the structure expected by the portfolio calculator
-            const portfolioData = {
-                distributions: allFundData.distributions
-            };
+        function calculateFundSharesAndValues() {
+            allFundData['ANCFX'].initialShares = 1255.196;
+            allFundData['AGTHX'].initialShares = 974.753;
+            allFundData['AFAXX'].initialShares = 77650.8;
             
-            // Incorporate the NAV data in the format expected by calculateMutualFundPortfolio
             for (const fund of FUNDS) {
-                if (allFundData[fund]) {
-                    portfolioData[fund] = allFundData[fund];
+                let currentShares = allFundData[fund].initialShares;
+                const dates = Object.keys(allFundData[fund].dailyChanges).sort();
+                
+                for (const date of dates) {
+                    const dayData = allFundData[fund].dailyChanges[date];
+                    dayData.previousShares = currentShares;
+                    
+                    if (dayData.totalDistributions > 0) {
+                        const addedShares = (currentShares * dayData.totalDistributions) / dayData.NAV;
+                        dayData.addedShares = addedShares;
+                        currentShares += addedShares;
+                    } else {
+                        dayData.addedShares = 0;
+                    }
+                    
+                    dayData.newShares = currentShares;
+                    dayData.newFundValue = currentShares * dayData.NAV;
                 }
             }
-            
-            return portfolioData;
         }
 
-        // Function to generate portfolio HTML output
-        function generatePortfolioOutput(allFundData) {
-            if (!allFundData || !allFundData.distributions) {
-                return '<p class="error">Unable to calculate portfolios: Distribution data is missing</p>';
+        function generatePortfolioOutput() {
+            if (!allFundData || !allFundData['ANCFX']) {
+                return '<p class="error">Unable to calculate portfolios: Data is missing</p>';
             }
             
             let outputHTML = '<div class="section">';
             
-            // Calculate MMF portfolio
-            let mmfPortfolio;
             try {
-                mmfPortfolio = calculateMMFPortfolio(allFundData, 77650.8, 'AFAXX');
+                const afaxx = allFundData['AFAXX'];
+                const afaxxDates = Object.keys(afaxx.dailyChanges).sort();
+                const latestDate = afaxxDates[afaxxDates.length - 1];
+                const initialValue = afaxx.initialShares;
+                const currentValue = afaxx.dailyChanges[latestDate].newFundValue;
+                const totalReturn = ((currentValue / initialValue) - 1) * 100;
+                
                 outputHTML += '<h3>Money Market Fund Portfolio</h3>';
-                outputHTML += `<p>Initial investment: $77,650.80</p>`;
-                outputHTML += `<p>Current value: $${mmfPortfolio.currentValue.toFixed(2)}</p>`;
-                outputHTML += `<p>Total return: ${mmfPortfolio.totalReturn.toFixed(2)}%</p>`;
+                outputHTML += `<p>Initial investment: $${initialValue.toFixed(2)}</p>`;
+                outputHTML += `<p>Current value: $${currentValue.toFixed(2)}</p>`;
+                outputHTML += `<p>Total return: ${totalReturn.toFixed(2)}%</p>`;
                 
-                // Add details table
                 outputHTML += '<table>';
-                outputHTML += '<tr><th>Date</th><th>Transaction</th><th>Amount</th><th>Balance</th></tr>';
+                outputHTML += '<tr><th>Date</th><th>NAV</th><th>Distribution</th><th>Previous Shares</th><th>Added Shares</th><th>New Shares</th><th>Value</th></tr>';
                 
-                for (const transaction of mmfPortfolio.transactions || []) {
+                const displayDates = afaxxDates.slice(-10);
+                for (const date of displayDates) {
+                    const day = afaxx.dailyChanges[date];
                     outputHTML += `<tr>
-                        <td>${transaction.date}</td>
-                        <td>${transaction.type}</td>
-                        <td>$${transaction.amount.toFixed(2)}</td>
-                        <td>$${transaction.balance.toFixed(2)}</td>
+                        <td>${date}</td>
+                        <td>$${day.NAV.toFixed(2)}</td>
+                        <td>$${day.totalDistributions.toFixed(6)}</td>
+                        <td>${day.previousShares?.toFixed(3) || '-'}</td>
+                        <td>${day.addedShares.toFixed(3)}</td>
+                        <td>${day.newShares?.toFixed(3) || '-'}</td>
+                        <td>$${day.newFundValue?.toFixed(2) || '-'}</td>
                     </tr>`;
                 }
                 
@@ -372,32 +275,40 @@
                 console.error("MMF calculation error:", error);
             }
             
-            // Calculate mutual fund portfolio
-            let mutualFundPortfolio;
             try {
-                mutualFundPortfolio = calculateMutualFundPortfolio(allFundData, [
-                    { symbol: 'ANCFX', initialShares: 1255.196 },
-                    { symbol: 'AGTHX', initialShares: 974.753 }
-                ]);
-                
                 outputHTML += '<h3>Mutual Fund Portfolio</h3>';
                 outputHTML += '<table>';
-                outputHTML += '<tr><th>Fund</th><th>Shares</th><th>Initial Value</th><th>Current Value</th><th>Return</th></tr>';
+                outputHTML += '<tr><th>Fund</th><th>Initial Shares</th><th>Current Shares</th><th>Initial Value</th><th>Current Value</th><th>Return</th></tr>';
                 
                 let totalInitialValue = 0;
                 let totalCurrentValue = 0;
                 
-                for (const fund of mutualFundPortfolio.funds || []) {
+                for (const fund of ['ANCFX', 'AGTHX']) {
+                    const fundData = allFundData[fund];
+                    const dates = Object.keys(fundData.dailyChanges).sort();
+                    const latestDate = dates[dates.length - 1];
+                    
+                    const initialShares = fundData.initialShares;
+                    const initialNav = fundData.initialNAV;
+                    const initialValue = initialShares * initialNav;
+                    
+                    const currentShares = fundData.dailyChanges[latestDate].newShares || initialShares;
+                    const currentNav = fundData.dailyChanges[latestDate].NAV;
+                    const currentValue = currentShares * currentNav;
+                    
+                    const returnPct = ((currentValue / initialValue) - 1) * 100;
+                    
                     outputHTML += `<tr>
-                        <td>${fund.symbol}</td>
-                        <td>${fund.shares.toFixed(3)}</td>
-                        <td>$${fund.initialValue.toFixed(2)}</td>
-                        <td>$${fund.currentValue.toFixed(2)}</td>
-                        <td>${fund.return.toFixed(2)}%</td>
+                        <td>${fund}</td>
+                        <td>${initialShares.toFixed(3)}</td>
+                        <td>${currentShares.toFixed(3)}</td>
+                        <td>$${initialValue.toFixed(2)}</td>
+                        <td>$${currentValue.toFixed(2)}</td>
+                        <td>${returnPct.toFixed(2)}%</td>
                     </tr>`;
                     
-                    totalInitialValue += fund.initialValue;
-                    totalCurrentValue += fund.currentValue;
+                    totalInitialValue += initialValue;
+                    totalCurrentValue += currentValue;
                 }
                 
                 const totalReturn = ((totalCurrentValue / totalInitialValue) - 1) * 100;
@@ -405,23 +316,46 @@
                 outputHTML += `<tr>
                     <td><strong>Total</strong></td>
                     <td>-</td>
+                    <td>-</td>
                     <td><strong>$${totalInitialValue.toFixed(2)}</strong></td>
                     <td><strong>$${totalCurrentValue.toFixed(2)}</strong></td>
                     <td><strong>${totalReturn.toFixed(2)}%</strong></td>
                 </tr>`;
                 outputHTML += '</table>';
                 
-                // Add distribution details
-                outputHTML += '<h4>Distribution Details</h4>';
+                outputHTML += '<h4>Recent Distributions</h4>';
                 outputHTML += '<table>';
-                outputHTML += '<tr><th>Date</th><th>Fund</th><th>Type</th><th>Amount</th></tr>';
+                outputHTML += '<tr><th>Date</th><th>Fund</th><th>NAV</th><th>Distribution</th><th>Added Shares</th></tr>';
                 
-                for (const distribution of mutualFundPortfolio.distributions || []) {
+                let allDistributions = [];
+                for (const fund of ['ANCFX', 'AGTHX']) {
+                    const fundData = allFundData[fund];
+                    const dates = Object.keys(fundData.dailyChanges);
+                    
+                    for (const date of dates) {
+                        const dayData = fundData.dailyChanges[date];
+                        if (dayData.totalDistributions > 0) {
+                            allDistributions.push({
+                                date: date,
+                                fund: fund,
+                                nav: dayData.NAV,
+                                distribution: dayData.totalDistributions,
+                                addedShares: dayData.addedShares
+                            });
+                        }
+                    }
+                }
+                
+                allDistributions.sort((a, b) => new Date(b.date) - new Date(a.date));
+                allDistributions = allDistributions.slice(0, 10);
+                
+                for (const dist of allDistributions) {
                     outputHTML += `<tr>
-                        <td>${distribution.date}</td>
-                        <td>${distribution.symbol}</td>
-                        <td>${distribution.type}</td>
-                        <td>$${distribution.amount.toFixed(2)}</td>
+                        <td>${dist.date}</td>
+                        <td>${dist.fund}</td>
+                        <td>$${dist.nav.toFixed(2)}</td>
+                        <td>$${dist.distribution.toFixed(6)}</td>
+                        <td>${dist.addedShares.toFixed(3)}</td>
                     </tr>`;
                 }
                 
@@ -437,7 +371,73 @@
             return outputHTML;
         }
 
-        // Function to update timestamp
+        function displayDataStructure() {
+            const structureDiv = document.getElementById('data-structure');
+            
+            let summary = '';
+            
+            for (const fund of FUNDS) {
+                if (allFundData[fund]) {
+                    summary += `=== ${fund} Fund Data ===\n`;
+                    summary += `Start Date: ${allFundData[fund].startDate || 'Not set'}\n`;
+                    summary += `Initial Shares: ${allFundData[fund].initialShares || 'Not set'}\n`;
+                    summary += `Initial NAV: $${allFundData[fund].initialNAV?.toFixed(2) || 'Not set'}\n\n`;
+                    
+                    const dailyChanges = allFundData[fund].dailyChanges;
+                    const dates = Object.keys(dailyChanges).sort();
+                    
+                    summary += `Daily Changes: ${dates.length} records\n`;
+                    
+                    if (dates.length > 0) {
+                        summary += '\nSample daily changes (first 3, last 3):\n';
+                        
+                        const firstDates = dates.slice(0, Math.min(3, dates.length));
+                        for (const date of firstDates) {
+                            const change = dailyChanges[date];
+                            summary += `  ${date}:\n`;
+                            summary += `    NAV: $${change.NAV?.toFixed(2) || 'N/A'}\n`;
+                            summary += `    Total Distributions: $${change.totalDistributions?.toFixed(6) || '0.00'}\n`;
+                            summary += `    Previous Shares: ${change.previousShares?.toFixed(3) || 'N/A'}\n`;
+                            summary += `    Added Shares: ${change.addedShares?.toFixed(3) || '0.000'}\n`;
+                            summary += `    New Shares: ${change.newShares?.toFixed(3) || 'N/A'}\n`;
+                            summary += `    New Fund Value: $${change.newFundValue?.toFixed(2) || 'N/A'}\n\n`;
+                        }
+                        
+                        if (dates.length > 6) {
+                            summary += '  ... more records ...\n\n';
+                        }
+                        
+                        if (dates.length > 3) {
+                            const lastDates = dates.slice(-3);
+                            for (const date of lastDates) {
+                                const change = dailyChanges[date];
+                                summary += `  ${date}:\n`;
+                                summary += `    NAV: $${change.NAV?.toFixed(2) || 'N/A'}\n`;
+                                summary += `    Total Distributions: $${change.totalDistributions?.toFixed(6) || '0.00'}\n`;
+                                summary += `    Previous Shares: ${change.previousShares?.toFixed(3) || 'N/A'}\n`;
+                                summary += `    Added Shares: ${change.addedShares?.toFixed(3) || '0.000'}\n`;
+                                summary += `    New Shares: ${change.newShares?.toFixed(3) || 'N/A'}\n`;
+                                summary += `    New Fund Value: $${change.newFundValue?.toFixed(2) || 'N/A'}\n\n`;
+                            }
+                        }
+                    }
+                    
+                    summary += '\n';
+                }
+            }
+            
+            if (allFundData.distributions) {
+                summary += '=== Original Distribution Data Structure ===\n';
+                for (const fund of FUNDS) {
+                    if (allFundData.distributions[fund]) {
+                        summary += `\n${fund} Distribution Count: ${allFundData.distributions[fund].distributions?.length || 0}\n`;
+                    }
+                }
+            }
+            
+            structureDiv.textContent = summary;
+        }
+
         function updateTimestamp() {
             const now = new Date();
             document.getElementById('last-update').textContent = 
@@ -447,20 +447,24 @@
         async function loadAllFundsData() {
             debugLog.push("🚀 Starting data retrieval...");
             updateDebugDisplay();
+            
+            initializePortfolioData();
 
-            // Fetch NAV data for funds (excluding AFAXX)
             for (let fund of FUNDS) {
-                debugLog.push(`📊 Fetching NAV data for ${fund}...`);
-                updateDebugDisplay();
-                let result = await fetchYahooFinanceData(fund);
-                if (result) {
-                    allFundData[fund] = result;
-                    debugLog.push(`✅ Successfully loaded NAV data for ${fund}`);
+                if (fund !== 'AFAXX') {
+                    debugLog.push(`📊 Fetching NAV data for ${fund}...`);
+                    updateDebugDisplay();
+                    let result = await fetchYahooFinanceData(fund);
+                    if (result) {
+                        debugLog.push(`✅ Successfully loaded NAV data for ${fund}`);
+                    }
+                    updateDebugDisplay();
+                } else {
+                    allFundData[fund].initialNAV = 1.00;
+                    allFundData[fund].startDate = '2024-01-01';
                 }
-                updateDebugDisplay();
             }
 
-            // Load distributions (including AFAXX)
             try {
                 debugLog.push(`📊 Loading distribution data...`);
                 updateDebugDisplay();
@@ -472,70 +476,26 @@
                     debugLog.push(`✅ Successfully loaded distributions from distributions.txt.`);
                     allFundData['distributions'] = distributions;
                     
-                    // Log what funds we have distribution data for
-                    const fundKeys = Object.keys(distributions);
-                    debugLog.push(`📈 Found distribution data for: ${fundKeys.join(', ')}`);
-                    
-                    // Check each fund for specific data structure
-                    if (distributions.AFAXX && distributions.AFAXX.rates) {
-                        debugLog.push(`AFAXX: ${distributions.AFAXX.rates.length} rate records found`);
-                    } else {
-                        debugLog.push(`AFAXX: No valid rate records found`);
-                    }
-                    
-                    for (const fund of FUNDS) {
-                        if (distributions[fund] && distributions[fund].distributions) {
-                            debugLog.push(`${fund}: ${distributions[fund].distributions.length} distribution records found`);
-                        } else {
-                            debugLog.push(`${fund}: No valid distribution records found`);
-                        }
-                    }
+                    await processDistributionData(distributions);
                 }
             } catch (error) {
                 debugLog.push(`⚠️ Error loading distributions: ${error.message}`);
                 console.error("Distribution loading error:", error);
             }
             
-            // Structure check and adjustment for portfolio calculations
-            if (allFundData.distributions) {
-                // Make sure allFundData has the distributions in the format expected by the portfolio calculator
-                debugLog.push(`🔄 Preparing data for portfolio calculations...`);
-                
-                // AFAXX rate data needs to be accessible for MMF calculation
-                if (!allFundData.distributions.AFAXX || !allFundData.distributions.AFAXX.rates) {
-                    debugLog.push(`⚠️ AFAXX rate data not found or in wrong format`);
-                } else {
-                    debugLog.push(`✅ AFAXX rates data format validated`);
-                }
-                
-                // Check ANCFX and AGTHX distribution data
-                for (const fundSymbol of ['ANCFX', 'AGTHX']) {
-                    if (!allFundData.distributions[fundSymbol] || 
-                        !allFundData.distributions[fundSymbol].distributions || 
-                        !allFundData.distributions[fundSymbol].headers) {
-                        debugLog.push(`⚠️ ${fundSymbol} distribution data not found or in wrong format`);
-                    } else {
-                        debugLog.push(`✅ ${fundSymbol} distribution data format validated`);
-                    }
-                }
-            }
-            
-            // Calculate portfolio values
             try {
                 debugLog.push(`🧮 Calculating portfolio values...`);
                 updateDebugDisplay();
                 
-                // Generate HTML output for the portfolios
-                const preparedData = prepareDataForPortfolioCalculations(allFundData);
-                const portfolioHTML = generatePortfolioOutput(preparedData);
+                calculateFundSharesAndValues();
                 
-                // Display the portfolio results
+                const portfolioHTML = generatePortfolioOutput();
+                
                 document.getElementById('portfolio-results').innerHTML = portfolioHTML;
                 
                 debugLog.push(`✅ Portfolio calculations complete.`);
                 updateDebugDisplay();
                 
-                // Update timestamp
                 updateTimestamp();
             } catch (error) {
                 debugLog.push(`⚠️ Error calculating portfolios: ${error.message}`);
@@ -543,18 +503,18 @@
                 console.error("Portfolio calculation error:", error);
             }
             
-            // Update final debug log
             debugLog.push(`✅ Data retrieval complete. Displaying data structure below.`);
             updateDebugDisplay();
             
-            // Display data structure
-            displayDataStructure(allFundData);
+            displayDataStructure();
             
-            // Log the complete data object to console
             console.log('All fund data:', allFundData);
         }
 
-        // Add event listener for refresh button
+        function updateDebugDisplay() {
+            document.getElementById('debug').textContent = debugLog.join('\n\n');
+        }
+
         document.getElementById('refresh-btn').addEventListener('click', function() {
             document.getElementById('portfolio-results').innerHTML = 'Loading portfolio calculations...';
             loadAllFundsData();
