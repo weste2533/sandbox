@@ -1,169 +1,67 @@
 /**
  * Fund Data Processor
  * 
- * This module processes both mutual fund and money market fund (MMF) data
- * from text files, providing a unified data structure for NAV values and distributions.
+ * This module processes fund NAV and distribution data from various sources.
+ * - Fetches NAV data from Yahoo Finance for mutual funds via proxy
+ * - Processes distribution data from local text files
+ * - Handles different formats for mutual funds and money market funds
  * 
- * External callable functions:
- * - getFundData(ticker): Main function to retrieve complete fund data by ticker
- * - getDistributionsByDate(date): Get all fund distributions for a specific date
- * - getAllFundTickers(): Get list of all available fund tickers
+ * MAIN FUNCTIONS:
+ * 
+ * get_fund_data(ticker)
+ *   Main function to retrieve all data for a specific fund
+ *   - ticker (string): The fund ticker symbol
+ *   Returns: {Promise<Object>} - Promise resolving to an object with the following structure:
+ *     {
+ *       [date]: {
+ *         nav: Number,          // NAV price for the date
+ *         total_distributions: Number  // Total distributions for the date (or 0 if none)
+ *       },
+ *       ...
+ *     }
+ * 
+ * loadDistributionData(ticker)
+ *   Loads distribution data from a text file for a specific fund
+ *   - ticker (string): The fund ticker symbol
+ *   Returns: {Promise<Object>} - Promise resolving to processed distribution data
+ * 
+ * fetchNAVData(ticker)
+ *   Fetches NAV data from Yahoo Finance via proxy
+ *   - ticker (string): The fund ticker symbol
+ *   Returns: {Promise<Object>} - Promise resolving to NAV data by date
+ * 
+ * isMoneyMarketFund(ticker)
+ *   Determines if a ticker represents a money market fund
+ *   - ticker (string): The fund ticker symbol
+ *   Returns: {Boolean} - True if the ticker is a money market fund
  */
 
-/**
- * Configuration
- */
 // Known MMF tickers (expand as needed)
-const MMF_TICKERS = new Set(['AFAXX']);
-
-// File paths configuration
-const BASE_PATH = '.'; // Update this if files are in a subfolder
+const MMF_TICKERS = new Set(['AFAXX', 'CFIXX', 'SPAXX', 'SPRXX', 'SWVXX']);
 
 /**
  * Determines if a ticker represents a money market fund
  * @param {string} ticker - Fund ticker symbol
- * @returns {boolean} - True if ticker is for a money market fund
+ * @returns {boolean} - True if money market fund
  */
 function isMoneyMarketFund(ticker) {
-  return MMF_TICKERS.has(ticker.toUpperCase());
+  return MMF_TICKERS.has(ticker);
 }
 
 /**
- * Gets the appropriate filename for a fund's distribution data
+ * Gets the appropriate filename for a ticker's distribution data
  * @param {string} ticker - Fund ticker symbol
- * @returns {string} - Path to the distribution file
+ * @returns {string} - Filename for distribution data
  */
 function getDistributionFileName(ticker) {
   const typePrefix = isMoneyMarketFund(ticker) ? 'mmf' : 'mutual';
-  return `${BASE_PATH}/${typePrefix}_${ticker.toUpperCase()}_distributions.txt`;
+  return `${typePrefix}_${ticker}_distributions.txt`;
 }
 
 /**
- * Parse a date string to ensure consistent format
- * @param {string} dateStr - Date string in various formats
- * @returns {string} - Date in MM/DD/YYYY format
- */
-function parseDate(dateStr) {
-  // Handle formats like MM/DD/YYYY, MM/DD/YY, or MM/DD/20YY
-  if (dateStr.includes('/')) {
-    const parts = dateStr.split('/');
-    if (parts[2].length === 2) {
-      parts[2] = '20' + parts[2]; // Assume 20xx for two-digit years
-    }
-    return parts.join('/');
-  }
-  
-  // Handle format like MM/DD/YY
-  if (dateStr.length === 8 && dateStr.includes('/')) {
-    return dateStr.substring(0, 6) + '20' + dateStr.substring(6);
-  }
-  
-  // Handle format like MM/DD/YYYY with potential leading zeros
-  if (dateStr.length === 10 && dateStr.includes('/')) {
-    return dateStr;
-  }
-  
-  // Handle format like MM/DD/YYYY with potential dashes
-  if (dateStr.includes('-')) {
-    const parts = dateStr.split('-');
-    return `${parts[0]}/${parts[1]}/${parts[2]}`;
-  }
-  
-  // For MMF format (MM/DD/YYYY)
-  return dateStr;
-}
-
-/**
- * Processes mutual fund distribution data from text content
- * @param {string} fileContent - Content of the mutual fund distribution file
+ * Loads and processes distribution data from text file
  * @param {string} ticker - Fund ticker symbol
- * @returns {Object} - Processed distribution data
- */
-function processMutualFundDistributions(fileContent, ticker) {
-  const distributions = {};
-  const lines = fileContent.split('\n').filter(line => line.trim());
-  
-  // Skip header
-  if (lines.length > 1) {
-    const dataLines = lines.slice(1);
-    
-    dataLines.forEach(line => {
-      const parts = line.trim().split('\t');
-      if (parts.length >= 8) {
-        const recordDate = parseDate(parts[0]);
-        
-        // Parse all distribution values
-        const regularDividend = parseFloat(parts[3].replace('$', '')) || 0;
-        const specialDividend = parseFloat(parts[4].replace('$', '')) || 0;
-        const longTermGains = parseFloat(parts[5].replace('$', '')) || 0;
-        const shortTermGains = parseFloat(parts[6].replace('$', '')) || 0;
-        const reinvestNAV = parseFloat(parts[7].replace('$', '')) || 0;
-        
-        // Calculate total distributions
-        const totalDistributions = regularDividend + specialDividend + 
-                                 longTermGains + shortTermGains;
-        
-        // Store distribution data
-        distributions[recordDate] = {
-          date: recordDate,
-          NAV: reinvestNAV,
-          total_distributions: totalDistributions,
-          // Additional data for reference
-          detail: {
-            regularDividend,
-            specialDividend,
-            longTermGains,
-            shortTermGains
-          }
-        };
-      }
-    });
-  }
-  
-  return distributions;
-}
-
-/**
- * Processes money market fund (MMF) distribution data from text content
- * @param {string} fileContent - Content of the MMF distribution file
- * @param {string} ticker - Fund ticker symbol
- * @returns {Object} - Processed distribution data
- */
-function processMMFDistributions(fileContent, ticker) {
-  const distributions = {};
-  const lines = fileContent.split('\n').filter(line => line.trim());
-  
-  // Skip header
-  if (lines.length > 1) {
-    const dataLines = lines.slice(1);
-    
-    dataLines.forEach(line => {
-      const parts = line.trim().split('\t');
-      if (parts.length >= 2) {
-        const rate = parseFloat(parts[0]) || 0;
-        const date = parseDate(parts[1]);
-        
-        // For MMF funds, NAV is fixed at 1.00 and distribution is the daily rate
-        distributions[date] = {
-          date,
-          NAV: 1.00,
-          total_distributions: rate,
-          // Additional data for reference
-          detail: {
-            dailyRate: rate
-          }
-        };
-      }
-    });
-  }
-  
-  return distributions;
-}
-
-/**
- * Loads and processes distribution data for a specific fund
- * @param {string} ticker - Fund ticker symbol
- * @returns {Promise<Object>} - Promise resolving to fund distribution data
+ * @returns {Promise<Object>} - Promise resolving to processed distribution data
  */
 async function loadDistributionData(ticker) {
   try {
@@ -176,152 +74,239 @@ async function loadDistributionData(ticker) {
     }
     
     const fileContent = await response.text();
-    
-    // Process based on fund type
-    if (isMoneyMarketFund(ticker)) {
-      return processMMFDistributions(fileContent, ticker);
-    } else {
-      return processMutualFundDistributions(fileContent, ticker);
-    }
+    return processDistributionData(fileContent, ticker);
   } catch (error) {
-    console.error(`Error loading distribution data for ${ticker}:`, error);
+    console.error(`Failed to load distribution data for ${ticker}:`, error);
     return {};
   }
 }
 
 /**
- * Main function to retrieve complete fund data by ticker
+ * Process raw distribution file content based on fund type
+ * @param {string} fileContent - Raw text content of distribution file
  * @param {string} ticker - Fund ticker symbol
- * @returns {Promise<Object>} - Promise resolving to complete fund data with NAVs and distributions
+ * @returns {Object} - Processed distribution data
  */
-async function getFundData(ticker) {
-  ticker = ticker.toUpperCase();
+function processDistributionData(fileContent, ticker) {
+  const isMmf = isMoneyMarketFund(ticker);
+  const distributionData = {};
+  const lines = fileContent.split('\n').filter(line => line.trim());
   
-  try {
-    // Step 1: Load distribution data
-    const distributionData = await loadDistributionData(ticker);
+  if (!lines.length) return distributionData;
+  
+  // Skip header line
+  const dataLines = lines.slice(1);
+
+  dataLines.forEach(line => {
+    const parts = line.trim().split('\t');
     
-    // Step 2: For mutual funds, we may need to get additional NAV data from Yahoo Finance
-    // This is implemented in the full version with the proxy setup
-    
-    // Return the consolidated data
-    return {
-      ticker,
-      type: isMoneyMarketFund(ticker) ? 'MMF' : 'Mutual Fund',
-      distributions: distributionData
-    };
-  } catch (error) {
-    console.error(`Error retrieving fund data for ${ticker}:`, error);
-    return {
-      ticker,
-      type: isMoneyMarketFund(ticker) ? 'MMF' : 'Mutual Fund',
-      distributions: {},
-      error: error.message
-    };
-  }
+    if (isMmf) {
+      // Process Money Market Fund (daily rates)
+      if (parts.length >= 2) {
+        const [rateStr, dateStr] = parts;
+        
+        // Format date to MM/DD/YYYY
+        const date = formatDate(dateStr);
+        
+        distributionData[date] = {
+          total_distributions: parseFloat(rateStr) || 0
+        };
+      }
+    } else {
+      // Process Mutual Fund (distribution records)
+      if (parts.length >= 8) {
+        const recordDateStr = parts[0];
+        
+        // Format date to MM/DD/YYYY
+        const date = formatDate(recordDateStr);
+        
+        // Parse distribution components
+        const regularDividend = parseFloat(parts[3].replace('$', '')) || 0;
+        const specialDividend = parseFloat(parts[4].replace('$', '')) || 0;
+        const longTermGains = parseFloat(parts[5].replace('$', '')) || 0;
+        const shortTermGains = parseFloat(parts[6].replace('$', '')) || 0;
+        const reinvestNAV = parseFloat(parts[7].replace('$', '')) || 0;
+        
+        // Calculate total distributions
+        const totalDistributions = regularDividend + specialDividend + longTermGains + shortTermGains;
+        
+        distributionData[date] = {
+          nav: reinvestNAV,
+          total_distributions: totalDistributions
+        };
+      }
+    }
+  });
+
+  return distributionData;
 }
 
 /**
- * Get all fund distributions for a specific date
- * @param {string} date - Date in MM/DD/YYYY format
- * @returns {Promise<Object>} - Promise resolving to all fund distributions for that date
+ * Format date string to MM/DD/YYYY
+ * @param {string} dateStr - Input date string (various formats)
+ * @returns {string} - Formatted date string MM/DD/YYYY
  */
-async function getDistributionsByDate(date) {
-  // This would require maintaining a list of all available funds
-  // For demonstration, we'll use a simple implementation
-  const knownFunds = await getAllFundTickers();
-  const result = {};
+function formatDate(dateStr) {
+  // Handle various date formats
+  let date;
   
-  for (const ticker of knownFunds) {
-    const fundData = await getFundData(ticker);
-    if (fundData.distributions && fundData.distributions[date]) {
-      result[ticker] = fundData.distributions[date];
+  if (dateStr.includes('/')) {
+    // Already in MM/DD/YYYY format
+    date = dateStr;
+  } else if (dateStr.length === 8) {
+    // Format MM/DD/YY to MM/DD/YYYY
+    const month = dateStr.substring(0, 2);
+    const day = dateStr.substring(3, 5);
+    const year = dateStr.substring(6, 8);
+    date = `${month}/${day}/20${year}`;
+  } else if (dateStr.length === 10 && dateStr.includes('-')) {
+    // Format YYYY-MM-DD to MM/DD/YYYY
+    const parts = dateStr.split('-');
+    date = `${parts[1]}/${parts[2]}/${parts[0]}`;
+  } else {
+    // Try to parse as YYYY-MM-DD
+    try {
+      const dateObj = new Date(dateStr);
+      const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+      const day = dateObj.getDate().toString().padStart(2, '0');
+      const year = dateObj.getFullYear();
+      date = `${month}/${day}/${year}`;
+    } catch (e) {
+      // Default to original if parsing fails
+      date = dateStr;
     }
   }
   
-  return result;
+  return date;
 }
 
 /**
- * Get list of all available fund tickers
- * @returns {Promise<Array>} - Promise resolving to array of available tickers
- */
-async function getAllFundTickers() {
-  // In a real implementation, this might scan the directory or use a config file
-  // For now, we'll return the known funds
-  return ['ANCFX', 'AGTHX', 'AFAXX'];
-}
-
-/**
- * Extended version with Yahoo Finance integration
- * This would require a proxy or backend service to avoid CORS issues
- */
-
-/**
- * Fetches NAV data from Yahoo Finance (requires backend proxy)
+ * Fetches NAV data from Yahoo Finance via proxy
  * @param {string} ticker - Fund ticker symbol
- * @param {string} startDate - Start date in YYYY-MM-DD format
- * @param {string} endDate - End date in YYYY-MM-DD format
- * @returns {Promise<Object>} - Promise resolving to NAV history data
+ * @returns {Promise<Object>} - Promise resolving to NAV data by date
  */
-async function fetchYahooFinanceData(ticker, startDate, endDate) {
-  // This would require a proxy setup to avoid CORS issues
-  // Implementation would depend on your server architecture
+async function fetchNAVData(ticker) {
+  if (isMoneyMarketFund(ticker)) {
+    // Money market funds always have NAV of $1.00
+    return {};  // We'll add the $1.00 NAV when merging data
+  }
+  
   try {
-    const proxyUrl = `/api/proxy?ticker=${ticker}&startDate=${startDate}&endDate=${endDate}`;
+    // Use a proxy service to fetch data from Yahoo Finance
+    // Note: In a production environment, you might need a real proxy or API
+    const proxyUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=5y`;
+    
     const response = await fetch(proxyUrl);
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch Yahoo Finance data: ${response.statusText}`);
+      throw new Error(`Failed to fetch NAV data for ${ticker}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    
+    // Process Yahoo Finance data
+    const navData = {};
+    
+    if (data.chart && data.chart.result && data.chart.result.length > 0) {
+      const result = data.chart.result[0];
+      const timestamps = result.timestamp || [];
+      const quotes = result.indicators.quote[0] || {};
+      const adjClose = result.indicators.adjclose?.[0]?.adjclose || [];
+      
+      // Use adjusted close as the NAV
+      for (let i = 0; i < timestamps.length; i++) {
+        if (adjClose[i] !== null && adjClose[i] !== undefined) {
+          const date = new Date(timestamps[i] * 1000);
+          const formattedDate = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear()}`;
+          
+          navData[formattedDate] = {
+            nav: adjClose[i],
+            total_distributions: 0  // Default to 0, will be updated if distribution data exists
+          };
+        }
+      }
+    }
+    
+    return navData;
   } catch (error) {
-    console.error(`Error fetching Yahoo Finance data for ${ticker}:`, error);
+    console.error(`Error fetching NAV data for ${ticker}:`, error);
     return {};
   }
 }
 
 /**
- * Merges NAV and distribution data into a unified structure
- * @param {Object} navData - NAV history data
- * @param {Object} distributionData - Distribution data
- * @returns {Object} - Merged data with consistent structure
+ * Main function to get all fund data
+ * @param {string} ticker - Fund ticker symbol
+ * @returns {Promise<Object>} - Promise resolving to combined NAV and distribution data
  */
-function mergeNavAndDistributionData(navData, distributionData) {
-  const mergedData = { ...navData };
+async function get_fund_data(ticker) {
+  // Fetch both NAV and distribution data in parallel
+  const [navData, distributionData] = await Promise.all([
+    fetchNAVData(ticker),
+    loadDistributionData(ticker)
+  ]);
   
-  // Add distribution data where available
+  // Combine the data
+  const combinedData = { ...navData };
+  
+  // Add distribution data
   for (const date in distributionData) {
-    if (mergedData[date]) {
-      // Update existing entry with distribution data
-      mergedData[date].total_distributions = distributionData[date].total_distributions;
-      mergedData[date].detail = distributionData[date].detail;
+    if (!combinedData[date]) {
+      // If date doesn't exist in NAV data, create it
+      combinedData[date] = {
+        nav: distributionData[date].nav || (isMoneyMarketFund(ticker) ? 1.00 : 0),
+        total_distributions: distributionData[date].total_distributions || 0
+      };
     } else {
-      // Add distribution entry
-      mergedData[date] = distributionData[date];
+      // If date exists, update with distribution data
+      combinedData[date].total_distributions = distributionData[date].total_distributions || 0;
+      
+      // Use reinvest NAV from distribution data if available
+      if (distributionData[date].nav) {
+        combinedData[date].nav = distributionData[date].nav;
+      }
     }
   }
   
-  return mergedData;
+  // For MMFs, ensure all dates have NAV = 1.00
+  if (isMoneyMarketFund(ticker)) {
+    for (const date in combinedData) {
+      combinedData[date].nav = 1.00;
+    }
+  }
+  
+  return combinedData;
+}
+
+/**
+ * Example function to display fund data in console
+ * @param {string} ticker - Fund ticker symbol
+ */
+async function displayFundData(ticker) {
+  console.log(`Fetching data for ${ticker}...`);
+  const data = await get_fund_data(ticker);
+  console.log(`Fund data for ${ticker}:`, data);
+  return data;
 }
 
 // Export functions for browser environment
 if (typeof window !== 'undefined') {
   window.fundDataProcessor = {
-    getFundData,
-    getDistributionsByDate,
-    getAllFundTickers,
-    isMoneyMarketFund
+    get_fund_data,
+    loadDistributionData,
+    fetchNAVData,
+    isMoneyMarketFund,
+    displayFundData
   };
 }
 
-// Export for module environments
+// Export for Node.js environment
 if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
   module.exports = {
-    getFundData,
-    getDistributionsByDate,
-    getAllFundTickers,
-    isMoneyMarketFund
+    get_fund_data,
+    loadDistributionData,
+    fetchNAVData,
+    isMoneyMarketFund,
+    displayFundData
   };
 }
