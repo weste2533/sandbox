@@ -362,6 +362,9 @@
                 dataHTML += generateDistributionTable(fund);
             }
             
+            // Add portfolio calculations
+            dataHTML += generatePortfolioOutput(allFundData);
+            
             // Update the data output section
             document.getElementById('data-output').innerHTML = dataHTML;
             
