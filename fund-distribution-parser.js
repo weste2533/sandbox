@@ -1,13 +1,9 @@
-// Combined fund distribution parser and portfolio calculator
-
-/* ------------------- Fund Distribution Parser Functions ------------------- */
-
 /**
- * Loads and parses fund distribution data from a text file
+ * Loads and parses fund distribution data from a text file into simplified format
  * @param {string} fileUrl - URL of the distributions text file to load
- * @returns {Promise<Object>} - Promise resolving to an object containing the parsed fund data
+ * @returns {Promise<Object>} - Promise resolving to simplified fund data
  */
-function loadFundDistributionData(fileUrl) {
+function loadSimplifiedFundData(fileUrl) {
     return new Promise((resolve, reject) => {
         fetch(fileUrl)
             .then(response => {
@@ -17,7 +13,7 @@ function loadFundDistributionData(fileUrl) {
                 return response.text();
             })
             .then(data => {
-                const result = parseDistributionData(data);
+                const result = parseSimplifiedDistributionData(data);
                 resolve(result);
             })
             .catch(error => {
@@ -27,28 +23,27 @@ function loadFundDistributionData(fileUrl) {
 }
 
 /**
- * Parses the distribution data text content
+ * Parses the distribution data text content to extract only key information
  * @param {string} data - Raw text content from the distributions file
- * @returns {Object} - Object containing parsed fund data
+ * @returns {Object} - Object containing simplified fund distribution data
  */
-function parseDistributionData(data) {
+function parseSimplifiedDistributionData(data) {
     const lines = data.trim().split('\n');
     
     let currentFund = null;
     let isHeader = false;
     let headers = [];
     
-    const fundData = {
+    // Initialize result object with the three funds
+    const simplifiedFundData = {
         ANCFX: {
-            distributions: [],
-            headers: []
+            distributions: []
         },
         AGTHX: {
-            distributions: [],
-            headers: []
+            distributions: []
         },
         AFAXX: {
-            rates: []
+            distributions: []
         }
     };
     
@@ -76,9 +71,6 @@ function parseDistributionData(data) {
         // Process headers
         if (isHeader) {
             headers = line.split('\t');
-            if (currentFund === 'ANCFX' || currentFund === 'AGTHX') {
-                fundData[currentFund].headers = headers;
-            }
             isHeader = false;
             continue;
         }
@@ -88,351 +80,122 @@ function parseDistributionData(data) {
         
         if (currentFund === 'ANCFX' || currentFund === 'AGTHX') {
             if (values.length === headers.length) {
-                // Create object with header keys and row values
-                const rowObj = {};
+                // Create a map of header to value
+                const rowMap = {};
                 headers.forEach((header, index) => {
-                    rowObj[header] = values[index];
+                    rowMap[header] = values[index];
                 });
-                fundData[currentFund].distributions.push(rowObj);
+                
+                // Calculate total distributions: all dividends + all capital gains
+                const incomeRegular = parseFloat(rowMap['Income Dividend Regular']) || 0;
+                const incomeSpecial = parseFloat(rowMap['Income Dividend Special']) || 0;
+                const capGainsLong = parseFloat(rowMap['Cap. Gains Long-Term']) || 0;
+                const capGainsShort = parseFloat(rowMap['Cap. Gains Short-Term']) || 0;
+                const totalDistributions = incomeRegular + incomeSpecial + capGainsLong + capGainsShort;
+                
+                // Extract the calculated date and reinvest NAV
+                const distributionDate = rowMap['Calculated Date'];
+                const reinvestNAV = parseFloat(rowMap['Reinvest NAV']) || 0;
+                
+                // Add to the simplified data structure
+                simplifiedFundData[currentFund].distributions.push({
+                    'Distribution Date': distributionDate,
+                    'Reinvest NAV': reinvestNAV,
+                    'Total Distributions': totalDistributions
+                });
             }
         } else if (currentFund === 'AFAXX') {
             if (values.length === 2) {
-                fundData[currentFund].rates.push({
-                    rate: values[0],
-                    date: values[1]
+                const rate = parseFloat(values[0]) || 0;
+                const asOfDate = values[1];
+                
+                // For AFAXX, the rate is the total distribution and NAV is always $1.00
+                simplifiedFundData[currentFund].distributions.push({
+                    'Distribution Date': asOfDate,
+                    'Reinvest NAV': 1.00,
+                    'Total Distributions': rate
                 });
             }
         }
     }
     
-    return fundData;
+    return simplifiedFundData;
 }
 
 /**
- * Formats a date string from MM/DD/YY to MM/DD/YYYY
- * @param {string} dateString - Date string in MM/DD/YY format
- * @returns {string} - Formatted date string
+ * Displays the simplified fund data in the console
+ * @param {Object} fundData - The simplified fund data object
  */
-function formatDate(dateString) {
-    const parts = dateString.split('/');
-    if (parts.length === 3 && parts[2].length === 2) {
-        const year = parts[2].startsWith('0') ? '20' + parts[2] : '20' + parts[2];
-        return `${parts[0]}/${parts[1]}/${year}`;
-    }
-    return dateString;
-}
-
-/* ------------------- Portfolio Calculator Functions ------------------- */
-
-/**
- * Calculates the current value of an MMF portfolio with reinvested distributions
- * @param {Object} allFundData - The complete fund data object
- * @param {number} initialUnits - Initial number of units owned on 12/31/2024
- * @param {string} fundSymbol - Fund symbol (e.g., 'AFAXX')
- * @returns {Object} Portfolio value information
- */
-function calculateMMFPortfolio(allFundData, initialUnits, fundSymbol = 'AFAXX') {
-    // For MMF, NAV is always $1.00
-    const NAV = 1.00;
+function displayFundData(fundData) {
+    console.log('=== Simplified Fund Distribution Data ===');
     
-    const distributionData = allFundData.distributions?.[fundSymbol];
-    if (!distributionData || !distributionData.rates || !distributionData.rates.length) {
-        return {
-            initialValue: initialUnits * NAV,
-            currentValue: initialUnits * NAV,
-            totalReturn: 0,
-            percentageReturn: 0,
-            error: "No distribution data available"
-        };
-    }
-
-    const startDate = new Date('2024-12-31');
-    const recentRates = distributionData.rates.filter(rate => {
-        const rateDate = new Date(rate.date);
-        return rateDate >= startDate;
-    });
-
-    recentRates.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    let currentUnits = initialUnits;
-    const accumulationDetails = [];
-    
-    for (const rate of recentRates) {
-        let rateValue = parseFloat(rate.rate);
-        const dailyRate = rateValue;
-        const distributionAmount = currentUnits * dailyRate;
-        currentUnits += distributionAmount;
+    for (const [fundSymbol, fund] of Object.entries(fundData)) {
+        console.log(`\n${fundSymbol} (${fund.distributions.length} distributions):`);
         
-        accumulationDetails.push({
-            date: rate.date,
-            rate: rate.rate,
-            dailyRate: (dailyRate * 100).toFixed(6) + '%',
-            distributionAmount: distributionAmount.toFixed(6),
-            runningUnits: currentUnits.toFixed(6)
-        });
-    }
-
-    const initialValue = initialUnits * NAV;
-    const currentValue = currentUnits * NAV;
-    const totalReturn = currentValue - initialValue;
-    const percentageReturn = (totalReturn / initialValue) * 100;
-
-    return {
-        initialUnits,
-        currentUnits,
-        initialValue,
-        currentValue,
-        totalReturn,
-        percentageReturn,
-        accumulationDetails
-    };
-}
-
-/**
- * Calculates the current value of a mutual fund portfolio with NAV changes and distributions
- * @param {Object} allFundData - The complete fund data object
- * @param {Object} initialHoldings - Object with fund symbols as keys and initial shares as values
- * @returns {Object} Portfolio value information
- */
-function calculateMutualFundPortfolio(allFundData, initialHoldings) {
-    const startDate = new Date('2024-12-31');
-    const results = {};
-    let totalInitialValue = 0;
-    let totalCurrentValue = 0;
-    
-    for (const [fundSymbol, initialShares] of Object.entries(initialHoldings)) {
-        if (!allFundData[fundSymbol]) {
-            results[fundSymbol] = { error: `No data available for ${fundSymbol}` };
-            continue;
-        }
+        // Display the first 3 and last 3 distributions to keep the output manageable
+        const displayCount = 3;
+        const distributions = fund.distributions;
         
-        const navData = allFundData[fundSymbol];
-        if (!navData || !navData.timestamp || !navData.indicators?.quote?.[0]?.close) {
-            results[fundSymbol] = { error: `Invalid NAV data for ${fundSymbol}` };
-            continue;
-        }
-        
-        const timestamps = navData.timestamp;
-        const prices = navData.indicators.quote[0].close;
-        
-        let initialNAV = null;
-        let initialNAVDate = null;
-        
-        for (let i = 0; i < timestamps.length; i++) {
-            const navDate = new Date(timestamps[i] * 1000);
-            if (navDate >= startDate) {
-                initialNAV = prices[i];
-                initialNAVDate = navDate;
-                break;
-            }
-        }
-        
-        if (initialNAV === null) {
-            for (let i = timestamps.length - 1; i >= 0; i--) {
-                const navDate = new Date(timestamps[i] * 1000);
-                if (navDate <= startDate) {
-                    initialNAV = prices[i];
-                    initialNAVDate = navDate;
-                    break;
-                }
-            }
-        }
-        
-        const currentNAV = prices[prices.length - 1];
-        const currentNAVDate = new Date(timestamps[timestamps.length - 1] * 1000);
-        
-        const initialValueFromNAV = initialShares * initialNAV;
-        const currentValueFromNAV = initialShares * currentNAV;
-        
-        const distributionData = allFundData.distributions?.[fundSymbol];
-        let currentShares = initialShares;
-        const distributionDetails = [];
-        
-        if (distributionData && distributionData.distributions && distributionData.distributions.length > 0) {
-            const distributions = distributionData.distributions.filter(dist => {
-                const dateField = distributionData.headers.find(h => 
-                    h.toLowerCase().includes('date') || h.toLowerCase().includes('ex-div')
-                );
-                if (!dateField || !dist[dateField]) return false;
-                const distDate = new Date(dist[dateField]);
-                return distDate >= startDate;
+        if (distributions.length <= displayCount * 2) {
+            // If there are few distributions, show them all
+            distributions.forEach((dist, index) => {
+                console.log(`  ${index + 1}. Date: ${dist['Distribution Date']}, NAV: $${dist['Reinvest NAV'].toFixed(2)}, Total Dist: $${dist['Total Distributions'].toFixed(6)}`);
             });
+        } else {
+            // Show first few
+            for (let i = 0; i < displayCount; i++) {
+                const dist = distributions[i];
+                console.log(`  ${i + 1}. Date: ${dist['Distribution Date']}, NAV: $${dist['Reinvest NAV'].toFixed(2)}, Total Dist: $${dist['Total Distributions'].toFixed(6)}`);
+            }
             
-            const amountField = distributionData.headers.find(h => 
-                h.toLowerCase().includes('distribution') || 
-                h.toLowerCase().includes('amount') || 
-                h.toLowerCase().includes('dividend')
+            console.log('  ...');
+            
+            // Show last few
+            for (let i = distributions.length - displayCount; i < distributions.length; i++) {
+                const dist = distributions[i];
+                console.log(`  ${i + 1}. Date: ${dist['Distribution Date']}, NAV: $${dist['Reinvest NAV'].toFixed(2)}, Total Dist: $${dist['Total Distributions'].toFixed(6)}`);
+            }
+        }
+    }
+}
+
+/**
+ * Example usage of the fund distribution parser
+ */
+function main() {
+    // Replace with the actual path to your distributions file
+    const distributionsFileUrl = 'distributions.txt';
+    
+    console.log('Loading fund distribution data...');
+    
+    loadSimplifiedFundData(distributionsFileUrl)
+        .then(fundData => {
+            // Display summary of the data
+            displayFundData(fundData);
+            
+            // Example: Access specific distribution data
+            console.log('\n=== Example Data Access ===');
+            
+            // Get the latest distribution for ANCFX
+            if (fundData.ANCFX.distributions.length > 0) {
+                const latestANCFX = fundData.ANCFX.distributions[fundData.ANCFX.distributions.length - 1];
+                console.log(`Latest ANCFX distribution (${latestANCFX['Distribution Date']}): $${latestANCFX['Total Distributions'].toFixed(4)}`);
+            }
+            
+            // Calculate average distribution for AFAXX in 2025
+            const afaxx2025 = fundData.AFAXX.distributions.filter(dist => 
+                dist['Distribution Date'].includes('2025')
             );
             
-            if (amountField) {
-                for (const dist of distributions) {
-                    const distributionAmount = parseFloat(dist[amountField]) || 0;
-                    const dateField = distributionData.headers.find(h => 
-                        h.toLowerCase().includes('date') || h.toLowerCase().includes('ex-div')
-                    );
-                    const distDate = dateField ? new Date(dist[dateField]) : null;
-                    
-                    let reinvestmentNAV = currentNAV;
-                    if (distDate) {
-                        for (let i = 0; i < timestamps.length; i++) {
-                            const navDate = new Date(timestamps[i] * 1000);
-                            if (navDate >= distDate) {
-                                reinvestmentNAV = prices[i];
-                                break;
-                            }
-                        }
-                    }
-                    
-                    const distributionPerShare = distributionAmount;
-                    const additionalShares = (distributionPerShare * currentShares) / reinvestmentNAV;
-                    currentShares += additionalShares;
-                    
-                    distributionDetails.push({
-                        date: distDate ? distDate.toLocaleDateString() : 'Unknown',
-                        distributionPerShare: distributionPerShare.toFixed(4),
-                        totalDistribution: (distributionPerShare * currentShares).toFixed(2),
-                        reinvestmentNAV: reinvestmentNAV.toFixed(2),
-                        additionalShares: additionalShares.toFixed(6),
-                        runningShares: currentShares.toFixed(6)
-                    });
-                }
+            if (afaxx2025.length > 0) {
+                const avgDist = afaxx2025.reduce((sum, dist) => sum + dist['Total Distributions'], 0) / afaxx2025.length;
+                console.log(`Average AFAXX distribution in 2025 (${afaxx2025.length} distributions): $${avgDist.toFixed(8)}`);
             }
-        }
-        
-        const currentValue = currentShares * currentNAV;
-        const initialValue = initialShares * initialNAV;
-        
-        results[fundSymbol] = {
-            initialShares,
-            currentShares,
-            initialNAV,
-            currentNAV,
-            initialValue,
-            currentValue,
-            valueChangeFromNAV: currentValueFromNAV - initialValueFromNAV,
-            valueChangeFromDistributions: currentValue - currentValueFromNAV,
-            totalReturn: currentValue - initialValue,
-            percentageReturn: ((currentValue - initialValue) / initialValue) * 100,
-            initialNAVDate: initialNAVDate?.toLocaleDateString(),
-            currentNAVDate: currentNAVDate?.toLocaleDateString(),
-            distributionDetails
-        };
-        
-        totalInitialValue += initialValue;
-        totalCurrentValue += currentValue;
-    }
-    
-    results.portfolio = {
-        totalInitialValue,
-        totalCurrentValue,
-        totalReturn: totalCurrentValue - totalInitialValue,
-        percentageReturn: ((totalCurrentValue - totalInitialValue) / totalInitialValue) * 100
-    };
-    
-    return results;
-}
-
-/**
- * Generates HTML output for portfolio calculations
- * @param {Object} allFundData - Parsed fund data from distribution parser
- * @returns {string} HTML string with formatted results
- */
-function generatePortfolioOutput(allFundData) {
-    let outputHTML = '';
-    
-    const mmfPortfolio = calculateMMFPortfolio(allFundData, 77650.8, 'AFAXX');
-    const mutualFundPortfolio = calculateMutualFundPortfolio(allFundData, {
-        'AGTHX': 104.855,
-        'ANCFX': 860.672
-    });
-    
-    outputHTML += `
-    <div class="section">
-        <h2>MMF Portfolio (AFAXX)</h2>
-        <p>Starting with 77,650.8 units on 12/31/2024</p>
-        <table>
-            <tr><th>Initial Units</th><td>${mmfPortfolio.initialUnits.toFixed(2)}</td></tr>
-            <tr><th>Current Units</th><td>${parseFloat(mmfPortfolio.currentUnits).toFixed(2)}</td></tr>
-            <tr><th>Initial Value</th><td>$${mmfPortfolio.initialValue.toFixed(2)}</td></tr>
-            <tr><th>Current Value</th><td>$${parseFloat(mmfPortfolio.currentValue).toFixed(2)}</td></tr>
-            <tr><th>Total Return</th><td>$${mmfPortfolio.totalReturn.toFixed(2)}</td></tr>
-            <tr><th>Percentage Return</th><td>${mmfPortfolio.percentageReturn.toFixed(4)}%</td></tr>
-        </table>
-        <h3>Distribution Accumulation Details</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th><th>Rate</th><th>Daily Rate</th>
-                    <th>Distribution Amount</th><th>Running Units</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${mmfPortfolio.accumulationDetails.map(detail => `
-                    <tr>
-                        <td>${detail.date}</td><td>${detail.rate}</td><td>${detail.dailyRate}</td>
-                        <td>${detail.distributionAmount}</td><td>${detail.runningUnits}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>`;
-    
-    outputHTML += `
-    <div class="section">
-        <h2>Mutual Fund Portfolio</h2>
-        <p>Holdings as of 12/31/2024:</p>
-        <ul>
-            <li>AGTHX: 104.855 shares</li>
-            <li>ANCFX: 860.672 shares</li>
-        </ul>
-        <h3>Portfolio Summary</h3>
-        <table>
-            <tr><th>Initial Portfolio Value</th><td>$${mutualFundPortfolio.portfolio.totalInitialValue.toFixed(2)}</td></tr>
-            <tr><th>Current Portfolio Value</th><td>$${mutualFundPortfolio.portfolio.totalCurrentValue.toFixed(2)}</td></tr>
-            <tr><th>Total Return</th><td>$${mutualFundPortfolio.portfolio.totalReturn.toFixed(2)}</td></tr>
-            <tr><th>Percentage Return</th><td>${mutualFundPortfolio.portfolio.percentageReturn.toFixed(4)}%</td></tr>
-        </table>
-        
-        ${Object.entries(mutualFundPortfolio)
-            .filter(([key]) => key !== 'portfolio')
-            .map(([fundSymbol, fundData]) => `
-                <h3>${fundSymbol} Details</h3>
-                ${fundData.error ? `<p class="error">${fundData.error}</p>` : `
-                <table>
-                    <tr><th>Initial Shares</th><td>${fundData.initialShares.toFixed(6)}</td></tr>
-                    <tr><th>Current Shares</th><td>${parseFloat(fundData.currentShares).toFixed(6)}</td></tr>
-                    <tr><th>Initial NAV (${fundData.initialNAVDate})</th><td>$${fundData.initialNAV.toFixed(2)}</td></tr>
-                    <tr><th>Current NAV (${fundData.currentNAVDate})</th><td>$${fundData.currentNAV.toFixed(2)}</td></tr>
-                    <tr><th>Initial Value</th><td>$${fundData.initialValue.toFixed(2)}</td></tr>
-                    <tr><th>Current Value</th><td>$${fundData.currentValue.toFixed(2)}</td></tr>
-                    <tr><th>Value Change from NAV</th><td>$${fundData.valueChangeFromNAV.toFixed(2)}</td></tr>
-                    <tr><th>Value Change from Distributions</th><td>$${fundData.valueChangeFromDistributions.toFixed(2)}</td></tr>
-                    <tr><th>Total Return</th><td>$${fundData.totalReturn.toFixed(2)}</td></tr>
-                    <tr><th>Percentage Return</th><td>${fundData.percentageReturn.toFixed(4)}%</td></tr>
-                </table>
-                ${fundData.distributionDetails?.length > 0 ? `
-                    <h4>Distribution Reinvestment Details</h4>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Date</th><th>Distribution/Share</th><th>Total Distribution</th>
-                                <th>Reinvestment NAV</th><th>Additional Shares</th><th>Running Shares</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${fundData.distributionDetails.map(detail => `
-                                <tr>
-                                    <td>${detail.date}</td><td>$${detail.distributionPerShare}</td>
-                                    <td>$${detail.totalDistribution}</td><td>$${detail.reinvestmentNAV}</td>
-                                    <td>${detail.additionalShares}</td><td>${detail.runningShares}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                ` : '<p>No distributions since 12/31/2024</p>'}
-                `}
-            `).join('')}
-    </div>`;
-    
-    return outputHTML;
+            
+            // Example usage in application
+            console.log('\nFund data loaded successfully and ready for use in your application!');
+        })
+        .catch(error => {
+            console.error('Error loading fund data:', error);
+        });
 }
