@@ -1,32 +1,24 @@
 /**
- * Loads and parses fund distribution data from a text file into simplified format
- * @param {string} fileUrl - URL of the distributions text file to load
- * @returns {Promise<Object>} - Promise resolving to simplified fund data
- */
-/**
- * Parses the distribution data text content to extract simplified info while maintaining compatibility
+ * Parses the distribution data text content to extract standardized information
  * @param {string} data - Raw text content from the distributions file
- * @returns {Object} - Object containing simplified fund distribution data in compatible format
+ * @returns {Object} - Object containing standardized fund distribution data
  */
-function parseSimplifiedDistributionData(data) {
+function parseStandardizedDistributionData(data) {
     const lines = data.trim().split('\n');
     
     let currentFund = null;
     let isHeader = false;
-    let headers = [];
     
-    // Initialize result object with format compatible with original code
+    // Initialize result object with standardized structure for all funds
     const fundData = {
         ANCFX: {
-            distributions: [],
-            headers: []
+            distributions: []
         },
         AGTHX: {
-            distributions: [],
-            headers: []
+            distributions: []
         },
         AFAXX: {
-            rates: []
+            distributions: []
         }
     };
     
@@ -51,12 +43,8 @@ function parseSimplifiedDistributionData(data) {
             continue;
         }
         
-        // Process headers
+        // Skip headers but mark as processed
         if (isHeader) {
-            headers = line.split('\t');
-            if (currentFund === 'ANCFX' || currentFund === 'AGTHX') {
-                fundData[currentFund].headers = headers;
-            }
             isHeader = false;
             continue;
         }
@@ -65,34 +53,32 @@ function parseSimplifiedDistributionData(data) {
         const values = line.split('\t');
         
         if (currentFund === 'ANCFX' || currentFund === 'AGTHX') {
-            if (values.length === headers.length) {
-                // Create object with header keys and row values (maintaining original format)
-                const rowObj = {};
-                headers.forEach((header, index) => {
-                    rowObj[header] = values[index];
+            if (values.length >= 8) { // Ensure we have enough values
+                // Extract only needed values
+                const calculatedDate = values[1]; // Calculated Date
+                const reinvestNAV = parseFloat(values[7]); // Reinvest NAV
+                
+                // Calculate total distributions
+                const incomeRegular = parseFloat(values[3]) || 0;
+                const incomeSpecial = parseFloat(values[4]) || 0;
+                const capGainsLong = parseFloat(values[5]) || 0;
+                const capGainsShort = parseFloat(values[6]) || 0;
+                const totalDistributions = incomeRegular + incomeSpecial + capGainsLong + capGainsShort;
+                
+                // Create standardized entry
+                fundData[currentFund].distributions.push({
+                    'Distribution Date': calculatedDate,
+                    'Reinvest NAV': reinvestNAV,
+                    'Total Distributions': totalDistributions
                 });
-                
-                // Calculate total distributions: all dividends + all capital gains
-                const incomeRegular = parseFloat(rowObj['Income Dividend Regular']) || 0;
-                const incomeSpecial = parseFloat(rowObj['Income Dividend Special']) || 0;
-                const capGainsLong = parseFloat(rowObj['Cap. Gains Long-Term']) || 0;
-                const capGainsShort = parseFloat(rowObj['Cap. Gains Short-Term']) || 0;
-                
-                // Add simplified information while maintaining the original format
-                rowObj['Total Distributions'] = incomeRegular + incomeSpecial + capGainsLong + capGainsShort;
-                rowObj['Distribution Date'] = rowObj['Calculated Date'];
-                
-                fundData[currentFund].distributions.push(rowObj);
             }
         } else if (currentFund === 'AFAXX') {
-            if (values.length === 2) {
-                // Maintain original structure but add simplified fields
-                fundData[currentFund].rates.push({
-                    rate: values[0],
-                    date: values[1],
-                    'Distribution Date': values[1],
-                    'Reinvest NAV': 1.00,
-                    'Total Distributions': parseFloat(values[0]) || 0
+            if (values.length >= 2) {
+                // Create standardized entry for AFAXX
+                fundData[currentFund].distributions.push({
+                    'Distribution Date': values[1], // Date
+                    'Reinvest NAV': 1.00, // Fixed value as in original code
+                    'Total Distributions': parseFloat(values[0]) || 0 // Rate
                 });
             }
         }
@@ -102,9 +88,9 @@ function parseSimplifiedDistributionData(data) {
 }
 
 /**
- * Loads and parses fund distribution data from a text file with simplified additions
+ * Loads and parses fund distribution data from a text file with standardized format
  * @param {string} fileUrl - URL of the distributions text file to load
- * @returns {Promise<Object>} - Promise resolving to fund data in compatible format
+ * @returns {Promise<Object>} - Promise resolving to standardized fund data
  */
 function loadFundDistributionData(fileUrl) {
     return new Promise((resolve, reject) => {
@@ -116,7 +102,7 @@ function loadFundDistributionData(fileUrl) {
                 return response.text();
             })
             .then(data => {
-                const result = parseSimplifiedDistributionData(data);
+                const result = parseStandardizedDistributionData(data);
                 resolve(result);
             })
             .catch(error => {
