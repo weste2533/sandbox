@@ -127,7 +127,7 @@ function formatDate(dateString) {
 /**
  * Calculates the current value of an MMF portfolio with reinvested distributions
  * @param {Object} allFundData - The complete fund data object
- * @param {number} initialUnits - Initial number of units owned on 12/30/2024
+ * @param {number} initialUnits - Initial number of units owned on 12/31/2024
  * @param {string} fundSymbol - Fund symbol (e.g., 'AFAXX')
  * @returns {Object} Portfolio value information
  */
@@ -349,7 +349,7 @@ function generatePortfolioOutput(allFundData) {
     outputHTML += `
     <div class="section">
         <h2>MMF Portfolio (AFAXX)</h2>
-        <p>Starting with 77,650.8 units on 12/30/2024</p>
+        <p>Starting with 77,650.8 units on 12/31/2024</p>
         <table>
             <tr><th>Initial Units</th><td>${mmfPortfolio.initialUnits.toFixed(2)}</td></tr>
             <tr><th>Current Units</th><td>${parseFloat(mmfPortfolio.currentUnits).toFixed(2)}</td></tr>
@@ -380,7 +380,7 @@ function generatePortfolioOutput(allFundData) {
     outputHTML += `
     <div class="section">
         <h2>Mutual Fund Portfolio</h2>
-        <p>Holdings as of 12/30/2024:</p>
+        <p>Holdings as of 12/31/2024:</p>
         <ul>
             <li>AGTHX: 104.855 shares</li>
             <li>ANCFX: 860.672 shares</li>
@@ -429,7 +429,7 @@ function generatePortfolioOutput(allFundData) {
                             `).join('')}
                         </tbody>
                     </table>
-                ` : '<p>No distributions since 12/30/2024</p>'}
+                ` : '<p>No distributions since 12/31/2024</p>'}
                 `}
             `).join('')}
     </div>`;
