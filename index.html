@@ -9,19 +9,31 @@
         #container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         #debug { font-family: monospace; white-space: pre-wrap; background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; max-height: 600px; overflow: auto; margin-bottom: 20px; }
         #data-structure { font-family: monospace; white-space: pre-wrap; background: #f8f8f8; color: #333; padding: 1rem; border-radius: 4px; max-height: 800px; overflow: auto; border: 1px solid #ddd; }
-        #portfolio-results { margin-top: 2rem; }
-        .section { margin-bottom: 2rem; border: 1px solid #eee; padding: 1rem; border-radius: 4px; }
-        .section h2 { margin-top: 0; }
-        .section h3 { margin-top: 1.5rem; }
-        .section h4 { margin-top: 1rem; }
-        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-        table th, table td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #eee; }
-        table th { background-color: #f8f8f8; }
         .error { color: #d32f2f; }
         .controls { margin-top: 1rem; margin-bottom: 1rem; }
         .controls button { padding: 0.5rem 1rem; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
         .controls button:hover { background-color: #45a049; }
         #last-update { margin-left: 1rem; font-size: 0.9rem; color: #666; }
+        
+        /* Tab styles */
+        .tabs { margin-top: 2rem; }
+        .tab-nav { display: flex; border-bottom: 1px solid #ddd; }
+        .tab-btn { padding: 0.75rem 1.5rem; cursor: pointer; background: #f8f8f8; border: 1px solid #ddd; border-bottom: none; border-radius: 4px 4px 0 0; margin-right: 0.5rem; }
+        .tab-btn:hover { background: #f0f0f0; }
+        .tab-btn.active { background: white; border-bottom: 1px solid white; margin-bottom: -1px; font-weight: bold; }
+        .tab-content { display: none; padding: 1.5rem; border: 1px solid #ddd; border-top: none; }
+        .tab-content.active { display: block; }
+        
+        /* Table styles */
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        table th, table td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #eee; }
+        table th { background-color: #f8f8f8; }
+        
+        /* Section styles */
+        .section { margin-bottom: 2rem; }
+        .section h2 { margin-top: 0; }
+        .section h3 { margin-top: 1.5rem; }
+        .section h4 { margin-top: 1rem; }
     </style>
 </head>
 <body>
@@ -33,17 +45,37 @@
             <span id="last-update">Last updated: Never</span>
         </div>
         
-        <!-- Portfolio Results -->
-        <h2>Portfolio Results</h2>
-        <div id="portfolio-results">Loading portfolio calculations...</div>
-        
-        <!-- Debug Output -->
-        <h2>Debug Output</h2>
-        <div id="debug">Debug Output: Loading data...</div>
-        
-        <!-- Data Structure Output -->
-        <h2>Data Structure</h2>
-        <div id="data-structure">Data structure will appear here once loaded...</div>
+        <!-- Tabs -->
+        <div class="tabs">
+            <!-- Tab Navigation -->
+            <div class="tab-nav">
+                <div class="tab-btn active" data-tab="mmf-portfolio">MMF Portfolio</div>
+                <div class="tab-btn" data-tab="mutual-fund-portfolio">Mutual Fund Portfolio</div>
+                <div class="tab-btn" data-tab="debug-output">Debug Output</div>
+                <div class="tab-btn" data-tab="data-structure">Data Structure</div>
+            </div>
+            
+            <!-- Tab Content -->
+            <div id="mmf-portfolio" class="tab-content active">
+                <h2>Money Market Fund Portfolio</h2>
+                <div id="mmf-results">Loading MMF portfolio calculations...</div>
+            </div>
+            
+            <div id="mutual-fund-portfolio" class="tab-content">
+                <h2>Mutual Fund Portfolio</h2>
+                <div id="mutual-fund-results">Loading mutual fund portfolio calculations...</div>
+            </div>
+            
+            <div id="debug-output" class="tab-content">
+                <h2>Debug Output</h2>
+                <div id="debug">Debug Output: Loading data...</div>
+            </div>
+            
+            <div id="data-structure" class="tab-content">
+                <h2>Data Structure</h2>
+                <div id="data-structure-content">Data structure will appear here once loaded...</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -59,6 +91,20 @@
         ];
         let debugLog = [];
         let allFundData = {};
+
+        // Tab functionality
+        document.querySelectorAll('.tab-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                // Remove active class from all tabs and contents
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                
+                // Add active class to clicked tab and corresponding content
+                button.classList.add('active');
+                const tabId = button.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
 
         async function fetchWithRetry(url, maxAttempts = 2) {
             for (let proxyIndex = 0; proxyIndex < PROXIES.length; proxyIndex++) {
@@ -146,7 +192,7 @@
         
         // Function to create a human-readable representation of the data structure
         function displayDataStructure(data) {
-            const structureDiv = document.getElementById('data-structure');
+            const structureDiv = document.getElementById('data-structure-content');
             
             // Function to create a simplified data representation
             function createDataSummary(data, prefix = '', maxDepth = 3, currentDepth = 0) {
@@ -335,19 +381,17 @@
             return portfolioData;
         }
 
-        // Function to generate portfolio HTML output
-        function generatePortfolioOutput(allFundData) {
+        // Generate MMF Portfolio HTML
+        function generateMMFPortfolioOutput(allFundData) {
             if (!allFundData || !allFundData.distributions) {
-                return '<p class="error">Unable to calculate portfolios: Distribution data is missing</p>';
+                return '<p class="error">Unable to calculate MMF portfolio: Distribution data is missing</p>';
             }
             
             let outputHTML = '<div class="section">';
             
             // Calculate MMF portfolio
-            let mmfPortfolio;
             try {
-                mmfPortfolio = calculateMMFPortfolio(allFundData, 77650.8, 'AFAXX');
-                outputHTML += '<h3>Money Market Fund Portfolio</h3>';
+                const mmfPortfolio = calculateMMFPortfolio(allFundData, 77650.8, 'AFAXX');
                 outputHTML += `<p>Initial investment: $77,650.80</p>`;
                 outputHTML += `<p>Current value: $${mmfPortfolio.currentValue.toFixed(2)}</p>`;
                 outputHTML += `<p>Total return: ${mmfPortfolio.totalReturn.toFixed(2)}%</p>`;
@@ -367,20 +411,29 @@
                 
                 outputHTML += '</table>';
             } catch (error) {
-                outputHTML += '<h3>Money Market Fund Portfolio</h3>';
                 outputHTML += `<p class="error">Error calculating MMF portfolio: ${error.message}</p>`;
                 console.error("MMF calculation error:", error);
             }
             
+            outputHTML += '</div>';
+            return outputHTML;
+        }
+
+        // Generate Mutual Fund Portfolio HTML
+        function generateMutualFundPortfolioOutput(allFundData) {
+            if (!allFundData || !allFundData.distributions) {
+                return '<p class="error">Unable to calculate mutual fund portfolio: Distribution data is missing</p>';
+            }
+            
+            let outputHTML = '<div class="section">';
+            
             // Calculate mutual fund portfolio
-            let mutualFundPortfolio;
             try {
-                mutualFundPortfolio = calculateMutualFundPortfolio(allFundData, [
+                const mutualFundPortfolio = calculateMutualFundPortfolio(allFundData, [
                     { symbol: 'ANCFX', initialShares: 1255.196 },
                     { symbol: 'AGTHX', initialShares: 974.753 }
                 ]);
                 
-                outputHTML += '<h3>Mutual Fund Portfolio</h3>';
                 outputHTML += '<table>';
                 outputHTML += '<tr><th>Fund</th><th>Shares</th><th>Initial Value</th><th>Current Value</th><th>Return</th></tr>';
                 
@@ -428,7 +481,6 @@
                 outputHTML += '</table>';
                 
             } catch (error) {
-                outputHTML += '<h3>Mutual Fund Portfolio</h3>';
                 outputHTML += `<p class="error">Error calculating mutual fund portfolio: ${error.message}</p>`;
                 console.error("Mutual Fund calculation error:", error);
             }
@@ -525,12 +577,14 @@
                 debugLog.push(`🧮 Calculating portfolio values...`);
                 updateDebugDisplay();
                 
-                // Generate HTML output for the portfolios
+                // Generate HTML output for each portfolio section
                 const preparedData = prepareDataForPortfolioCalculations(allFundData);
-                const portfolioHTML = generatePortfolioOutput(preparedData);
                 
-                // Display the portfolio results
-                document.getElementById('portfolio-results').innerHTML = portfolioHTML;
+                // Update the MMF portfolio tab
+                document.getElementById('mmf-results').innerHTML = generateMMFPortfolioOutput(preparedData);
+                
+                // Update the Mutual Fund portfolio tab
+                document.getElementById('mutual-fund-results').innerHTML = generateMutualFundPortfolioOutput(preparedData);
                 
                 debugLog.push(`✅ Portfolio calculations complete.`);
                 updateDebugDisplay();
@@ -539,7 +593,8 @@
                 updateTimestamp();
             } catch (error) {
                 debugLog.push(`⚠️ Error calculating portfolios: ${error.message}`);
-                document.getElementById('portfolio-results').innerHTML = `<p class="error">Error calculating portfolios: ${error.message}</p>`;
+                document.getElementById('mmf-results').innerHTML = `<p class="error">Error calculating MMF portfolio: ${error.message}</p>`;
+                document.getElementById('mutual-fund-results').innerHTML = `<p class="error">Error calculating mutual fund portfolio: ${error.message}</p>`;
                 console.error("Portfolio calculation error:", error);
             }
             
@@ -556,7 +611,8 @@
 
         // Add event listener for refresh button
         document.getElementById('refresh-btn').addEventListener('click', function() {
-            document.getElementById('portfolio-results').innerHTML = 'Loading portfolio calculations...';
+            document.getElementById('mmf-results').innerHTML = 'Loading MMF portfolio calculations...';
+            document.getElementById('mutual-fund-results').innerHTML = 'Loading mutual fund portfolio calculations...';
             loadAllFundsData();
         });
 
