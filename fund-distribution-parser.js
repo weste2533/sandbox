@@ -158,8 +158,8 @@ function calculateMMFPortfolio(allFundData, initialUnits, fundSymbol = 'AFAXX') 
     const accumulationDetails = [];
     
     for (const rate of recentRates) {
-        let rateValue = parseFloat(rate.rate) / 100;
-        const dailyRate = rateValue / 365;
+        let rateValue = parseFloat(rate.rate);
+        const dailyRate = rateValue;
         const distributionAmount = currentUnits * dailyRate;
         currentUnits += distributionAmount;
         
