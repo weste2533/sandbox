@@ -3,21 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fund Data Processor Demo</title>
+    <title>Fund Data Processor Example</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
-            line-height: 1.6;
-        }
-        .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .fund-section {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 10px;
         }
         th, td {
             border: 1px solid #ddd;
@@ -30,179 +36,120 @@
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
-        .controls {
-            margin: 20px 0;
-        }
         .loading {
-            display: none;
-            margin: 10px 0;
             font-style: italic;
+            color: #666;
+        }
+        .distribution {
+            color: green;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Fund Data Processor Demo</h1>
-
-        <div class="controls">
-            <label for="tickerInput">Fund Ticker:</label>
-            <input type="text" id="tickerInput" placeholder="Enter ticker (e.g., ANCFX, AFAXX)" value="ANCFX">
-            <button id="loadButton">Load Fund Data</button>
-            <span id="loading" class="loading">Loading...</span>
-        </div>
-
-        <div class="controls">
-            <label for="dateInput">Search by Date:</label>
-            <input type="text" id="dateInput" placeholder="MM/DD/YYYY" value="12/18/24">
-            <button id="dateButton">Find Distributions by Date</button>
-        </div>
-
-        <div id="fundInfo"></div>
-        <div id="dataContainer">
-            <table id="dataTable">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>NAV</th>
-                        <th>Total Distributions</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody id="dataBody"></tbody>
-            </table>
-        </div>
+    <h1>Fund Data Display Example</h1>
+    
+    <div class="fund-section" id="ANCFX-section">
+        <h2>ANCFX - American Funds Fundamental Investors</h2>
+        <div id="ANCFX-loading" class="loading">Loading data...</div>
+        <table id="ANCFX-table" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>NAV</th>
+                    <th>Distribution</th>
+                </tr>
+            </thead>
+            <tbody id="ANCFX-data"></tbody>
+        </table>
+    </div>
+    
+    <div class="fund-section" id="AGTHX-section">
+        <h2>AGTHX - American Funds Growth Fund of America</h2>
+        <div id="AGTHX-loading" class="loading">Loading data...</div>
+        <table id="AGTHX-table" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>NAV</th>
+                    <th>Distribution</th>
+                </tr>
+            </thead>
+            <tbody id="AGTHX-data"></tbody>
+        </table>
+    </div>
+    
+    <div class="fund-section" id="AFAXX-section">
+        <h2>AFAXX - American Funds Money Market Fund</h2>
+        <div id="AFAXX-loading" class="loading">Loading data...</div>
+        <table id="AFAXX-table" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>NAV</th>
+                    <th>Distribution</th>
+                </tr>
+            </thead>
+            <tbody id="AFAXX-data"></tbody>
+        </table>
     </div>
 
-    <!-- Load the Fund Data Processor script -->
+    <!-- Load the fund data processor script -->
     <script src="fund-data-processor.js"></script>
     
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const tickerInput = document.getElementById('tickerInput');
-            const loadButton = document.getElementById('loadButton');
-            const dateInput = document.getElementById('dateInput');
-            const dateButton = document.getElementById('dateButton');
-            const fundInfo = document.getElementById('fundInfo');
-            const dataBody = document.getElementById('dataBody');
-            const loading = document.getElementById('loading');
-
-            // Load fund data when button is clicked
-            loadButton.addEventListener('click', async function() {
-                const ticker = tickerInput.value.trim().toUpperCase();
-                if (!ticker) {
-                    alert('Please enter a fund ticker');
-                    return;
-                }
-
-                loading.style.display = 'inline';
-                dataBody.innerHTML = '';
-                fundInfo.innerHTML = '';
-
-                try {
-                    const data = await window.fundDataProcessor.getFundData(ticker);
+        // Function to display fund data in the table
+        async function displayFundData(ticker) {
+            try {
+                // Get the fund data
+                const data = await window.fundDataProcessor.get_fund_data(ticker);
+                
+                // Get the table elements
+                const loadingElem = document.getElementById(`${ticker}-loading`);
+                const tableElem = document.getElementById(`${ticker}-table`);
+                const dataElem = document.getElementById(`${ticker}-data`);
+                
+                // Sort dates in descending order (newest first)
+                const sortedDates = Object.keys(data).sort((a, b) => {
+                    const dateA = new Date(a);
+                    const dateB = new Date(b);
+                    return dateB - dateA;
+                });
+                
+                // Generate table rows
+                let htmlContent = '';
+                sortedDates.forEach(date => {
+                    const { nav, total_distributions } = data[date];
+                    const distributionClass = total_distributions > 0 ? 'distribution' : '';
                     
-                    // Display fund info
-                    fundInfo.innerHTML = `
-                        <h2>${ticker} - ${data.type}</h2>
-                        <p>Number of data points: ${Object.keys(data.distributions).length}</p>
+                    htmlContent += `
+                        <tr>
+                            <td>${date}</td>
+                            <td>$${nav.toFixed(2)}</td>
+                            <td class="${distributionClass}">$${total_distributions.toFixed(6)}</td>
+                        </tr>
                     `;
-
-                    // Display distribution data
-                    const dates = Object.keys(data.distributions).sort();
-                    
-                    dates.forEach(date => {
-                        const row = data.distributions[date];
-                        const tr = document.createElement('tr');
-                        
-                        // Format details based on fund type
-                        let details = '';
-                        if (data.type === 'MMF') {
-                            details = `Daily Rate: ${row.detail.dailyRate}`;
-                        } else {
-                            details = `
-                                Regular Div: $${row.detail.regularDividend.toFixed(4)}, 
-                                Special Div: $${row.detail.specialDividend.toFixed(4)}, 
-                                LT Gains: $${row.detail.longTermGains.toFixed(4)}, 
-                                ST Gains: $${row.detail.shortTermGains.toFixed(4)}
-                            `;
-                        }
-                        
-                        tr.innerHTML = `
-                            <td>${row.date}</td>
-                            <td>$${row.NAV.toFixed(2)}</td>
-                            <td>$${row.total_distributions.toFixed(4)}</td>
-                            <td>${details}</td>
-                        `;
-                        
-                        dataBody.appendChild(tr);
-                    });
-                } catch (error) {
-                    fundInfo.innerHTML = `<p>Error: ${error.message}</p>`;
-                } finally {
-                    loading.style.display = 'none';
-                }
-            });
-
-            // Find distributions by date
-            dateButton.addEventListener('click', async function() {
-                const date = dateInput.value.trim();
-                if (!date) {
-                    alert('Please enter a date');
-                    return;
-                }
-
-                loading.style.display = 'inline';
-                dataBody.innerHTML = '';
-                fundInfo.innerHTML = '';
-
-                try {
-                    const data = await window.fundDataProcessor.getDistributionsByDate(date);
-                    
-                    // Display results
-                    fundInfo.innerHTML = `
-                        <h2>Distributions for ${date}</h2>
-                        <p>Funds with distributions: ${Object.keys(data).length}</p>
-                    `;
-
-                    // Display distribution data
-                    Object.keys(data).forEach(ticker => {
-                        const row = data[ticker];
-                        const tr = document.createElement('tr');
-                        
-                        let details = '';
-                        if (window.fundDataProcessor.isMoneyMarketFund(ticker)) {
-                            details = `Daily Rate: ${row.detail.dailyRate}`;
-                        } else {
-                            details = `
-                                Regular Div: $${row.detail.regularDividend.toFixed(4)}, 
-                                Special Div: $${row.detail.specialDividend.toFixed(4)}, 
-                                LT Gains: $${row.detail.longTermGains.toFixed(4)}, 
-                                ST Gains: $${row.detail.shortTermGains.toFixed(4)}
-                            `;
-                        }
-                        
-                        tr.innerHTML = `
-                            <td>${ticker} - ${row.date}</td>
-                            <td>$${row.NAV.toFixed(2)}</td>
-                            <td>$${row.total_distributions.toFixed(4)}</td>
-                            <td>${details}</td>
-                        `;
-                        
-                        dataBody.appendChild(tr);
-                    });
-                    
-                    if (Object.keys(data).length === 0) {
-                        fundInfo.innerHTML += `<p>No distributions found for this date.</p>`;
-                    }
-                } catch (error) {
-                    fundInfo.innerHTML = `<p>Error: ${error.message}</p>`;
-                } finally {
-                    loading.style.display = 'none';
-                }
-            });
-
-            // Load default fund on page load
-            loadButton.click();
+                });
+                
+                // Update the table
+                dataElem.innerHTML = htmlContent;
+                
+                // Hide loading, show table
+                loadingElem.style.display = 'none';
+                tableElem.style.display = 'table';
+                
+            } catch (error) {
+                console.error(`Error displaying data for ${ticker}:`, error);
+                document.getElementById(`${ticker}-loading`).textContent = 
+                    `Error loading data for ${ticker}. See console for details.`;
+            }
+        }
+        
+        // Load data for each fund when the page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            displayFundData('ANCFX');
+            displayFundData('AGTHX');
+            displayFundData('AFAXX');
         });
     </script>
 </body>
